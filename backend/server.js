@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 const app = express();
 const port = 3001;
 const saltRounds = 10;
-const sessions = {}; // In-memory session store: { token: userId }
+const sessions = {};
 
 app.use(cors());
 app.use(express.json());
@@ -19,29 +19,25 @@ const dbConfig = {
   database: "social_network",
 };
 
-// Middleware to find the user ID from the session token
 const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const token = authHeader.split(" ")[1];
     const userId = sessions[token];
     if (userId) {
-      req.currentUserId = userId; // User ID is attached to the request
+      req.currentUserId = userId;
       return next();
     }
   }
-
-  // If no valid token is found, return 401 for protected routes
   return res
     .status(401)
     .json({ message: "Authentication required. Please log in." });
 };
 
 // =================================================================
-// 🔑 PUBLIC AUTHENTICATION ROUTES (Define BEFORE app.use(authenticate))
+// 🔑 PUBLIC AUTHENTICATION ROUTES
 // =================================================================
 
-// Register Endpoint
 app.post("/api/register", async (req, res) => {
   const { name, username, password, email, dob, gender } = req.body;
   try {
@@ -58,13 +54,30 @@ app.post("/api/register", async (req, res) => {
     });
   } catch (error) {
     console.error("Registration error:", error);
+
+    // Provide specific error messages for duplicate entries
+    if (error.code === "ER_DUP_ENTRY") {
+      if (error.message.includes("Username")) {
+        return res.status(409).json({
+          message:
+            "Username already taken. Please choose a different username.",
+        });
+      } else if (error.message.includes("Email")) {
+        return res.status(409).json({
+          message: "Email already registered. Please use a different email.",
+        });
+      }
+      return res.status(409).json({
+        message: "Username or Email already taken.",
+      });
+    }
+
     res.status(500).json({
-      message: "Registration failed. Username or Email might be taken.",
+      message: "Registration failed. Please try again.",
     });
   }
 });
 
-// Login Endpoint
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -95,7 +108,6 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Logout Endpoint
 app.post("/api/logout", (req, res) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
@@ -106,7 +118,7 @@ app.post("/api/logout", (req, res) => {
 });
 
 // =================================================================
-// 🛡️ APPLY AUTHENTICATION MIDDLEWARE TO ALL REMAINING ROUTES
+// 🛡️ APPLY AUTHENTICATION MIDDLEWARE
 // =================================================================
 app.use(authenticate);
 
@@ -114,19 +126,16 @@ app.use(authenticate);
 // 📰 PROTECTED NEWS FEED AND SEARCH ROUTES
 // =================================================================
 
-// GET /api/feed/:userId - Fetch the news feed using the Stored Procedure
 app.get("/api/feed/:userId", async (req, res) => {
   const userIdInput = req.currentUserId;
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-
     const [rows] = await connection.execute("CALL GetNewsFeed(?)", [
       userIdInput,
     ]);
     await connection.end();
-
-    res.json(rows[0] || []); // Ensure an array is returned
+    res.json(rows[0] || []);
   } catch (error) {
     console.error("Error fetching news feed from stored procedure:", error);
     res.status(500).json({
@@ -136,7 +145,6 @@ app.get("/api/feed/:userId", async (req, res) => {
   }
 });
 
-// GET /api/users/search - Search for users by name or username
 app.get("/api/users/search", async (req, res) => {
   const searchTerm = req.query.q;
 
@@ -150,9 +158,9 @@ app.get("/api/users/search", async (req, res) => {
     const connection = await mysql.createConnection(dbConfig);
     const [rows] = await connection.execute(
       `SELECT UserID, Name, Username 
-             FROM User 
-             WHERE Name LIKE ? OR Username LIKE ? 
-             LIMIT 10`,
+       FROM User 
+       WHERE Name LIKE ? OR Username LIKE ? 
+       LIMIT 10`,
       [searchPattern, searchPattern],
     );
     await connection.end();
@@ -167,7 +175,6 @@ app.get("/api/users/search", async (req, res) => {
 // 👤 PROTECTED PROFILE AND ACTION ROUTES
 // =================================================================
 
-// 1. Fetch Profile Data (General User Info)
 app.get("/api/user/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
@@ -188,18 +195,18 @@ app.get("/api/user/:userId", async (req, res) => {
   }
 });
 
-// 2. Fetch User Posts
 app.get("/api/user/:userId/posts", async (req, res) => {
   const { userId } = req.params;
   try {
     const connection = await mysql.createConnection(dbConfig);
     const [rows] = await connection.execute(
       `SELECT 
-                P.PostID, P.Content, P.Timestamp, P.LikeCount, P.CommentCount, G.GroupName 
-             FROM Post P
-             LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
-             WHERE P.UserID = ?
-             ORDER BY P.Timestamp DESC`,
+        P.PostID, P.Content, P.Timestamp, P.LikeCount, P.CommentCount, 
+        P.GroupID, G.Name AS GroupName 
+       FROM Post P
+       LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
+       WHERE P.UserID = ?
+       ORDER BY P.Timestamp DESC`,
       [userId],
     );
     await connection.end();
@@ -210,30 +217,25 @@ app.get("/api/user/:userId/posts", async (req, res) => {
   }
 });
 
-// 3. GET /api/user/:profileId/follow-status (UPDATED for multi-state friendship)
 app.get("/api/user/:profileId/follow-status", async (req, res) => {
   const currentUserId = req.currentUserId;
   const profileId = parseInt(req.params.profileId);
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-
-    // Fetch relationship status in BOTH DIRECTIONS
     const [rows] = await connection.execute(
       `SELECT Status, UserID1 FROM Friendship 
-             WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)`,
+       WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)`,
       [currentUserId, profileId, profileId, currentUserId],
     );
     await connection.end();
 
     if (rows.length > 0) {
-      // UserID1 is the reliable SENDER ID
       res.json({
         status: rows[0].Status,
         rowInitiatorId: rows[0].UserID1,
       });
     } else {
-      // No relationship found
       res.json({ status: null, rowInitiatorId: null });
     }
   } catch (error) {
@@ -242,7 +244,6 @@ app.get("/api/user/:profileId/follow-status", async (req, res) => {
   }
 });
 
-// 4. POST /api/user/:profileId/toggle-friendship
 app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
   const initiatorId = req.currentUserId;
   const targetId = parseInt(req.params.profileId);
@@ -257,29 +258,23 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
   try {
     const connection = await mysql.createConnection(dbConfig);
 
-    // 1. Check current relationship status in BOTH DIRECTIONS (UserID1 vs UserID2)
     const [existing] = await connection.execute(
       `SELECT Status, UserID1 
-             FROM Friendship 
-             WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)`,
+       FROM Friendship 
+       WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)`,
       [initiatorId, targetId, targetId, initiatorId],
     );
 
-    // Set variables based on found row
     const status = existing.length > 0 ? existing[0].Status : "None";
-    // UserID1 in the existing row is now the reliable SENDER ID when Status is 'Pending'
     const senderIdInRow = status !== "None" ? existing[0].UserID1 : null;
     const isInitiatorTheSender = senderIdInRow && senderIdInRow === initiatorId;
 
     let actionMessage = "No action taken.";
     let success = true;
 
-    // 2. Execute action based on explicit command and current status
     switch (action) {
       case "send":
         if (status === "None") {
-          // INSERT: The initiatorId is explicitly stored as UserID1 (Sender)
-          // and the targetId is UserID2 (Receiver). This defines the roles.
           await connection.execute(
             "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, 'Pending', CURRENT_DATE())",
             [initiatorId, targetId],
@@ -292,14 +287,10 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
         break;
 
       case "accept":
-        // Check 1: Status must be Pending.
-        // Check 2: Initiator (current user) MUST NOT be the sender (UserID1 in row).
         if (status === "Pending" && !isInitiatorTheSender) {
-          // UPDATE: We update the row we found, which is defined by the sorted IDs
-          // in the 'existing' result set.
           await connection.execute(
             "UPDATE Friendship SET Status = 'Accepted', SinceDate = CURRENT_DATE() WHERE UserID1 = ? AND UserID2 = ?",
-            [senderIdInRow, initiatorId], // Sender ID (UserID1) and Receiver ID (UserID2/initiatorId)
+            [senderIdInRow, initiatorId],
           );
           actionMessage = "Friend request accepted!";
         } else {
@@ -310,12 +301,10 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
         break;
 
       case "cancel":
-        // Check 1: Status must be Pending.
-        // Check 2: Initiator (current user) MUST be the sender (UserID1 in row).
         if (status === "Pending" && isInitiatorTheSender) {
           await connection.execute(
             "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
-            [initiatorId, targetId], // Delete the row where we were the sender
+            [initiatorId, targetId],
           );
           actionMessage = "Friend request cancelled.";
         } else {
@@ -326,9 +315,7 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
         break;
 
       case "unfriend":
-        // Check 1: Status must be Accepted.
         if (status === "Accepted") {
-          // DELETE: We delete the row regardless of who initiated it.
           await connection.execute(
             "DELETE FROM Friendship WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)",
             [initiatorId, targetId, targetId, initiatorId],
@@ -362,39 +349,30 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
   }
 });
 
-// Fetch all pending requests where the current user is the receiver
 app.get("/api/friendship/pending-requests", async (req, res) => {
-    const receiverId = req.currentUserId; 
+  const receiverId = req.currentUserId;
 
-    try {
-        const connection = await mysql.createConnection(dbConfig);
-        
-        // Fetch rows where:
-        // 1. Status is 'Pending'
-        // 2. The logged-in user (receiverId) is the target (UserID2)
-        // Note: UserID1 holds the Sender's ID in the pending row.
-        const [rows] = await connection.execute(
-            `SELECT 
-                F.UserID1 AS SenderID,
-                U.Name AS SenderName,
-                U.Username AS SenderUsername,
-                F.SinceDate
-             FROM Friendship F
-             JOIN User U ON F.UserID1 = U.UserID
-             WHERE F.UserID2 = ? AND F.Status = 'Pending'`,
-            [receiverId]
-        );
-        
-        await connection.end();
-        res.json(rows);
-
-    } catch (error) {
-        console.error("Error fetching pending requests:", error);
-        res.status(500).json({ message: "Failed to retrieve pending requests." });
-    }
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT 
+        F.UserID1 AS SenderID,
+        U.Name AS SenderName,
+        U.Username AS SenderUsername,
+        F.SinceDate
+       FROM Friendship F
+       JOIN User U ON F.UserID1 = U.UserID
+       WHERE F.UserID2 = ? AND F.Status = 'Pending'`,
+      [receiverId],
+    );
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching pending requests:", error);
+    res.status(500).json({ message: "Failed to retrieve pending requests." });
+  }
 });
 
-// 5. Like Action
 app.post("/api/post/:postId/like", async (req, res) => {
   const { postId } = req.params;
   const likerId = req.currentUserId;
@@ -429,7 +407,6 @@ app.post("/api/post/:postId/like", async (req, res) => {
   }
 });
 
-// 6. Add Comment
 app.post("/api/post/:postId/comment", async (req, res) => {
   const { postId } = req.params;
   const userId = req.currentUserId;
@@ -456,7 +433,6 @@ app.post("/api/post/:postId/comment", async (req, res) => {
   }
 });
 
-// 7. Delete Comment
 app.delete("/api/comment/:commentId", async (req, res) => {
   const { commentId } = req.params;
   const userId = req.currentUserId;
@@ -495,7 +471,114 @@ app.delete("/api/comment/:commentId", async (req, res) => {
   }
 });
 
-// 8. Join Group
+// =================================================================
+// 👥 GROUP ROUTES
+// =================================================================
+
+// Get all groups
+app.get("/api/groups", async (req, res) => {
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      "SELECT GroupID, Name, Description, MemberCount FROM GroupTable ORDER BY MemberCount DESC",
+    );
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching groups:", error);
+    res.status(500).json({ message: "Failed to retrieve groups." });
+  }
+});
+
+// Get user's groups
+app.get("/api/user/:userId/groups", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT G.GroupID, G.Name, G.Description, G.MemberCount, GM.Role, GM.JoinDate
+       FROM GroupTable G
+       JOIN GroupMembership GM ON G.GroupID = GM.GroupID
+       WHERE GM.UserID = ?
+       ORDER BY GM.JoinDate DESC`,
+      [userId],
+    );
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching user groups:", error);
+    res.status(500).json({ message: "Failed to retrieve user groups." });
+  }
+});
+
+// Get group details
+app.get("/api/group/:groupId", async (req, res) => {
+  const { groupId } = req.params;
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      "SELECT GroupID, Name, Description, MemberCount FROM GroupTable WHERE GroupID = ?",
+      [groupId],
+    );
+    await connection.end();
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Group not found." });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("Error fetching group details:", error);
+    res.status(500).json({ message: "Failed to retrieve group details." });
+  }
+});
+
+// Check if user is member of group
+app.get("/api/group/:groupId/membership-status", async (req, res) => {
+  const { groupId } = req.params;
+  const userId = req.currentUserId;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      "SELECT Role FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
+      [groupId, userId],
+    );
+    await connection.end();
+
+    if (rows.length > 0) {
+      res.json({ isMember: true, role: rows[0].Role });
+    } else {
+      res.json({ isMember: false, role: null });
+    }
+  } catch (error) {
+    console.error("Error checking membership status:", error);
+    res.status(500).json({ message: "Failed to check membership status." });
+  }
+});
+
+// Get group posts
+app.get("/api/group/:groupId/posts", async (req, res) => {
+  const { groupId } = req.params;
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT 
+        P.PostID, P.UserID, U.Name AS Author, P.Content, P.Timestamp, 
+        P.LikeCount, P.CommentCount
+       FROM Post P
+       JOIN User U ON P.UserID = U.UserID
+       WHERE P.GroupID = ?
+       ORDER BY P.Timestamp DESC`,
+      [groupId],
+    );
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching group posts:", error);
+    res.status(500).json({ message: "Failed to retrieve group posts." });
+  }
+});
+
 app.post("/api/group/:groupId/join", async (req, res) => {
   const { groupId } = req.params;
   const userId = req.currentUserId;
@@ -521,7 +604,6 @@ app.post("/api/group/:groupId/join", async (req, res) => {
   }
 });
 
-// 9. Leave Group
 app.delete("/api/group/:groupId/leave", async (req, res) => {
   const { groupId } = req.params;
   const userId = req.currentUserId;
@@ -549,7 +631,32 @@ app.delete("/api/group/:groupId/leave", async (req, res) => {
   }
 });
 
-// Start the server
+// Create new post
+app.post("/api/posts", async (req, res) => {
+  const userId = req.currentUserId;
+  const { content, groupId } = req.body;
+
+  if (!content) {
+    return res.status(400).json({ message: "Post content is required." });
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [result] = await connection.execute(
+      "INSERT INTO Post (UserID, GroupID, Content, MediaType, Timestamp) VALUES (?, ?, ?, 'text', NOW())",
+      [userId, groupId || null, content],
+    );
+    await connection.end();
+    res.status(201).json({
+      message: "Post created successfully.",
+      postId: result.insertId,
+    });
+  } catch (error) {
+    console.error("Error creating post:", error);
+    res.status(500).json({ message: "Failed to create post." });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Backend server running at http://localhost:${port}`);
 });
