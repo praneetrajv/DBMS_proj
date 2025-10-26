@@ -55,7 +55,6 @@ app.post("/api/register", async (req, res) => {
   } catch (error) {
     console.error("Registration error:", error);
 
-    // Provide specific error messages for duplicate entries
     if (error.code === "ER_DUP_ENTRY") {
       if (error.message.includes("Username")) {
         return res.status(409).json({
@@ -373,6 +372,63 @@ app.get("/api/friendship/pending-requests", async (req, res) => {
   }
 });
 
+// =================================================================
+// 📝 POST AND COMMENT ROUTES
+// =================================================================
+
+// Get specific post details
+app.get("/api/post/:postId", async (req, res) => {
+  const { postId } = req.params;
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT 
+        P.PostID, P.UserID, P.Content, P.Timestamp, P.LikeCount, P.CommentCount,
+        P.GroupID, G.Name AS GroupName, U.Name AS Author
+       FROM Post P
+       JOIN User U ON P.UserID = U.UserID
+       LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
+       WHERE P.PostID = ?`,
+      [postId],
+    );
+    await connection.end();
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Post not found." });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("Error fetching post details:", error);
+    res.status(500).json({ message: "Failed to retrieve post details." });
+  }
+});
+
+// Get comments for a specific post
+app.get("/api/post/:postId/comments", async (req, res) => {
+  const { postId } = req.params;
+  const currentUserId = req.currentUserId;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT 
+        C.CommentID, C.Content, C.Timestamp, C.UserID,
+        U.Name AS Author,
+        CASE WHEN C.UserID = ? THEN 1 ELSE 0 END AS IsOwner
+       FROM Comment C
+       JOIN User U ON C.UserID = U.UserID
+       WHERE C.PostID = ?
+       ORDER BY C.Timestamp ASC`,
+      [currentUserId, postId],
+    );
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching comments:", error);
+    res.status(500).json({ message: "Failed to retrieve comments." });
+  }
+});
+
 app.post("/api/post/:postId/like", async (req, res) => {
   const { postId } = req.params;
   const likerId = req.currentUserId;
@@ -468,6 +524,32 @@ app.delete("/api/comment/:commentId", async (req, res) => {
   } catch (error) {
     console.error("Error deleting comment:", error);
     res.status(500).json({ message: "Failed to delete comment." });
+  }
+});
+
+// Create new post
+app.post("/api/posts", async (req, res) => {
+  const userId = req.currentUserId;
+  const { content, groupId } = req.body;
+
+  if (!content) {
+    return res.status(400).json({ message: "Post content is required." });
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [result] = await connection.execute(
+      "INSERT INTO Post (UserID, GroupID, Content, MediaType, Timestamp) VALUES (?, ?, ?, 'text', NOW())",
+      [userId, groupId || null, content],
+    );
+    await connection.end();
+    res.status(201).json({
+      message: "Post created successfully.",
+      postId: result.insertId,
+    });
+  } catch (error) {
+    console.error("Error creating post:", error);
+    res.status(500).json({ message: "Failed to create post." });
   }
 });
 
@@ -628,32 +710,6 @@ app.delete("/api/group/:groupId/leave", async (req, res) => {
   } catch (error) {
     console.error("Error leaving group:", error);
     res.status(500).json({ message: "Failed to leave group." });
-  }
-});
-
-// Create new post
-app.post("/api/posts", async (req, res) => {
-  const userId = req.currentUserId;
-  const { content, groupId } = req.body;
-
-  if (!content) {
-    return res.status(400).json({ message: "Post content is required." });
-  }
-
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [result] = await connection.execute(
-      "INSERT INTO Post (UserID, GroupID, Content, MediaType, Timestamp) VALUES (?, ?, ?, 'text', NOW())",
-      [userId, groupId || null, content],
-    );
-    await connection.end();
-    res.status(201).json({
-      message: "Post created successfully.",
-      postId: result.insertId,
-    });
-  } catch (error) {
-    console.error("Error creating post:", error);
-    res.status(500).json({ message: "Failed to create post." });
   }
 });
 

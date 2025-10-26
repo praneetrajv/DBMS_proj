@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import PostCard from '../components/PostCard';
+import PostModal from '../components/PostModal';
 
 const API_BASE_URL = 'http://localhost:3001';
 
-// Define possible friendship states for the frontend
 const STATUS = {
     NOT_FRIENDS: 'None',
     PENDING_SENT: 'PendingSent',
@@ -23,17 +24,13 @@ const ProfilePage = () => {
     const [userPosts, setUserPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [pendingRequests, setPendingRequests] = useState([]);
-    const [commentInputs, setCommentInputs] = useState({});
-    const [showComments, setShowComments] = useState({});
+    const [selectedPostId, setSelectedPostId] = useState(null);
 
     const isCurrentUserProfile = userId === profileId;
 
-    // --- Core Logic: Interpret Status from Backend ---
     const interpretStatus = (data) => {
         if (!data.status) return STATUS.NOT_FRIENDS;
-
         if (data.status === 'Accepted') return STATUS.ACCEPTED;
-
         if (data.status === 'Pending') {
             if (data.rowInitiatorId === userId) {
                 return STATUS.PENDING_SENT;
@@ -86,7 +83,6 @@ const ProfilePage = () => {
         if (!userId || !profileId) return;
         setLoading(true);
 
-        // 1. Fetch Profile Data
         try {
             const profileResponse = await fetch(`${API_BASE_URL}/api/user/${profileId}`, {
                 headers: getAuthHeaders(),
@@ -102,7 +98,6 @@ const ProfilePage = () => {
             setProfileData(null);
         }
 
-        // 2. Check Friendship Status (only if not viewing own profile)
         if (isCurrentUserProfile) {
             setFriendshipStatus(STATUS.SELF);
         } else {
@@ -123,9 +118,7 @@ const ProfilePage = () => {
             }
         }
 
-        // 3. Fetch User Posts
         await fetchUserPosts();
-
         setLoading(false);
     };
 
@@ -136,7 +129,6 @@ const ProfilePage = () => {
         };
         fetchAllDetails();
     }, [profileId, userId]);
-
 
     const handleToggleFollow = async (explicitAction, targetProfileId) => {
         const targetId = targetProfileId || profileId;
@@ -191,9 +183,7 @@ const ProfilePage = () => {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                alert(data.message);
-                fetchUserPosts(); // Refresh posts
+                fetchUserPosts();
             } else {
                 const errorData = await response.json();
                 alert(errorData.message || "Failed to like post.");
@@ -204,43 +194,12 @@ const ProfilePage = () => {
         }
     };
 
-    const handleCommentSubmit = async (postId) => {
-        const content = commentInputs[postId];
-        if (!content || !content.trim()) {
-            alert("Comment cannot be empty.");
-            return;
-        }
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/post/${postId}/comment`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeaders()
-                },
-                body: JSON.stringify({ content })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                alert(data.message);
-                setCommentInputs({ ...commentInputs, [postId]: '' }); // Clear input
-                fetchUserPosts(); // Refresh posts
-            } else {
-                const errorData = await response.json();
-                alert(errorData.message || "Failed to add comment.");
-            }
-        } catch (error) {
-            console.error("Network error during comment action:", error);
-            alert("Network error during comment action.");
-        }
+    const openPostModal = (postId) => {
+        setSelectedPostId(postId);
     };
 
-    const toggleCommentSection = (postId) => {
-        setShowComments({
-            ...showComments,
-            [postId]: !showComments[postId]
-        });
+    const closePostModal = () => {
+        setSelectedPostId(null);
     };
 
     const getButtonText = () => {
@@ -258,9 +217,13 @@ const ProfilePage = () => {
         }
     };
 
-    if (loading || !profileData) return <div className="page-container"><p className="loading">Loading Profile...</p></div>;
+    if (loading || !profileData) {
+        return <div className="page-container"><p className="loading">Loading Profile...</p></div>;
+    }
 
-    if (!profileData.UserID) return <div className="page-container">User Not Found or Error Loading Profile.</div>;
+    if (!profileData.UserID) {
+        return <div className="page-container">User Not Found or Error Loading Profile.</div>;
+    }
 
     return (
         <div className="page-container profile-layout">
@@ -326,58 +289,25 @@ const ProfilePage = () => {
                     <p className="empty-state">No posts yet.</p>
                 )}
                 {userPosts.map(post => (
-                    <div key={post.PostID} className="post-card">
-                        <p className="content">{post.Content}</p>
-
-                        {post.GroupName && post.GroupID && (
-                            <p className="group">
-                                Posted in{' '}
-                                <Link to={`/group/${post.GroupID}`} className="group-link">
-                                    {post.GroupName}
-                                </Link>
-                            </p>
-                        )}
-
-                        <div className="post-actions">
-                            <span className="count-showcase">
-                                Likes: <strong>{post.LikeCount}</strong> | Comments: <strong>{post.CommentCount}</strong>
-                            </span>
-                            <div className="action-buttons">
-                                <button onClick={() => handleLike(post.PostID)} className="btn-like">
-                                    👍 Like
-                                </button>
-                                <button onClick={() => toggleCommentSection(post.PostID)} className="btn-comment">
-                                    💬 Comment
-                                </button>
-                            </div>
-                        </div>
-
-                        {showComments[post.PostID] && (
-                            <div className="comment-section">
-                                <textarea
-                                    value={commentInputs[post.PostID] || ''}
-                                    onChange={(e) => setCommentInputs({
-                                        ...commentInputs,
-                                        [post.PostID]: e.target.value
-                                    })}
-                                    placeholder="Write a comment..."
-                                    rows="2"
-                                    className="comment-input"
-                                />
-                                <button
-                                    onClick={() => handleCommentSubmit(post.PostID)}
-                                    className="btn-submit-comment"
-                                >
-                                    Post Comment
-                                </button>
-                            </div>
-                        )}
-
-                        <p className="timestamp">{new Date(post.Timestamp).toLocaleString()}</p>
-                    </div>
+                    <PostCard
+                        key={post.PostID}
+                        post={post}
+                        onLike={handleLike}
+                        onCommentClick={openPostModal}
+                        onPostClick={openPostModal}
+                    />
                 ))}
             </div>
+
+            {selectedPostId && (
+                <PostModal
+                    postId={selectedPostId}
+                    onClose={closePostModal}
+                    onUpdate={fetchUserPosts}
+                />
+            )}
         </div>
     );
 };
+
 export default ProfilePage;

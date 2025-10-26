@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import PostCard from '../components/PostCard';
+import PostModal from '../components/PostModal';
 
 const API_BASE_URL = 'http://localhost:3001';
 
@@ -12,6 +14,7 @@ const GroupDetailPage = () => {
     const [membershipStatus, setMembershipStatus] = useState({ isMember: false, role: null });
     const [loading, setLoading] = useState(true);
     const [newPostContent, setNewPostContent] = useState('');
+    const [selectedPostId, setSelectedPostId] = useState(null);
 
     const fetchGroupDetails = async () => {
         setLoading(true);
@@ -120,7 +123,7 @@ const GroupDetailPage = () => {
             if (response.ok) {
                 alert(data.message);
                 setNewPostContent('');
-                fetchGroupDetails(); // Refresh posts
+                fetchGroupDetails();
             } else {
                 alert(data.message || "Failed to create post.");
             }
@@ -141,9 +144,7 @@ const GroupDetailPage = () => {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                alert(data.message);
-                fetchGroupDetails(); // Refresh posts
+                fetchGroupDetails();
             } else {
                 const errorData = await response.json();
                 alert(errorData.message || "Failed to like post.");
@@ -152,6 +153,14 @@ const GroupDetailPage = () => {
             console.error("Network error during like action:", error);
             alert("Network error during like action.");
         }
+    };
+
+    const openPostModal = (postId) => {
+        setSelectedPostId(postId);
+    };
+
+    const closePostModal = () => {
+        setSelectedPostId(null);
     };
 
     if (loading || !groupData) {
@@ -185,7 +194,6 @@ const GroupDetailPage = () => {
 
             <hr />
 
-            {/* Create Post Section - Only for members */}
             {membershipStatus.isMember && (
                 <div className="create-post-section">
                     <h3>✍️ Create a Post</h3>
@@ -214,33 +222,30 @@ const GroupDetailPage = () => {
 
             <hr />
 
-            {/* Posts Section */}
             <h2>Group Posts ({posts.length})</h2>
             <div className="posts-grid" style={{ marginTop: '1.5rem' }}>
                 {posts.length === 0 ? (
                     <p className="empty-state">No posts in this group yet. Be the first to post!</p>
                 ) : (
                     posts.map(post => (
-                        <div key={post.PostID} className="post-card">
-                            <h4 className="post-author">
-                                <Link to={`/profile/${post.UserID}`}>{post.Author}</Link>
-                            </h4>
-                            <p className="content">{post.Content}</p>
-                            <div className="post-actions">
-                                <span className="count-showcase">
-                                    Likes: <strong>{post.LikeCount}</strong> | Comments: <strong>{post.CommentCount}</strong>
-                                </span>
-                                {membershipStatus.isMember && (
-                                    <button onClick={() => handleLike(post.PostID)}>
-                                        👍 Like
-                                    </button>
-                                )}
-                            </div>
-                            <p className="timestamp">{new Date(post.Timestamp).toLocaleString()}</p>
-                        </div>
+                        <PostCard
+                            key={post.PostID}
+                            post={post}
+                            onLike={handleLike}
+                            onCommentClick={openPostModal}
+                            onPostClick={openPostModal}
+                        />
                     ))
                 )}
             </div>
+
+            {selectedPostId && (
+                <PostModal
+                    postId={selectedPostId}
+                    onClose={closePostModal}
+                    onUpdate={fetchGroupDetails}
+                />
+            )}
         </div>
     );
 };
