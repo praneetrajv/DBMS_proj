@@ -14,8 +14,8 @@ app.use(express.json());
 
 const dbConfig = {
   host: "localhost",
-  user: "harshith",
-  password: "root",
+  user: "root",
+  password: "praneet",
   database: "social_network",
 };
 

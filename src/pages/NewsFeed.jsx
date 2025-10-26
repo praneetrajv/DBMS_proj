@@ -10,6 +10,7 @@ const NewsFeed = () => {
     const [feed, setFeed] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedPostId, setSelectedPostId] = useState(null);
+    const [newPostContent, setNewPostContent] = useState(''); // Missing state variable
 
     const fetchFeed = async () => {
         if (!userId) return;
@@ -39,6 +40,41 @@ const NewsFeed = () => {
             setFeed([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleCreatePost = async (e) => {
+        e.preventDefault();
+        if (!newPostContent.trim()) {
+            alert("Post content cannot be empty.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/posts`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders(),
+                },
+                body: JSON.stringify({
+                    content: newPostContent,
+                    groupId: null, // Changed from undefined 'groupId' variable to null for home feed posts
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                setNewPostContent('');
+                fetchFeed(); // Changed from fetchGroupDetails() to fetchFeed()
+            } else {
+                alert(data.message || "Failed to create post.");
+            }
+        } catch (error) {
+            console.error("Error creating post:", error);
+            alert("Network error during post creation.");
         }
     };
 
@@ -87,6 +123,31 @@ const NewsFeed = () => {
                 Viewing feed as User <strong>{userId}</strong>
             </p>
             {loading && <p className="loading">Loading Feed...</p>}
+            
+            <div className="create-post-section">
+                <h3>✍️ Create a Post</h3>
+                <form onSubmit={handleCreatePost}>
+                    <textarea
+                        value={newPostContent}
+                        onChange={(e) => setNewPostContent(e.target.value)}
+                        placeholder="What's on your mind?"
+                        rows="4"
+                        style={{
+                            width: '100%',
+                            padding: '1rem',
+                            borderRadius: '10px',
+                            border: '2px solid #e8eaf6',
+                            fontSize: '1rem',
+                            marginBottom: '1rem',
+                            fontFamily: 'inherit',
+                        }}
+                    />
+                    <button type="submit" className="btn-post">
+                        Post to Feed
+                    </button>
+                </form>
+            </div>
+
             <div className="posts-grid">
                 {feed.length === 0 && !loading && (
                     <p className="empty-state">

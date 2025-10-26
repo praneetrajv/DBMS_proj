@@ -56,7 +56,7 @@ const SearchBar = () => {
                                 to={`/profile/${user.UserID}`} 
                                 onClick={handleResultClick}
                             >
-                                **{user.Name}** (@{user.Username})
+                                {user.Name} (@{user.Username})
                             </Link>
                         </li>
                     ))}
