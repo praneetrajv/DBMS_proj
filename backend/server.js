@@ -1,8 +1,8 @@
 // server.js (Node.js/Express Backend)
 
-const express = require('express');
-const mysql = require('mysql2/promise'); // Using promise-based client
-const cors = require('cors');
+import express from 'express';
+import mysql from 'mysql2/promise'; 
+import cors from 'cors';
 
 const app = express();
 const port = 3001;
@@ -13,8 +13,8 @@ app.use(express.json());
 // ⚠️ IMPORTANT: Replace with your actual database credentials
 const dbConfig = {
     host: 'localhost',
-    user: 'your_user',
-    password: 'your_password',
+    user: 'harshith',
+    password: 'root',
     database: 'social_network'
 };
 
