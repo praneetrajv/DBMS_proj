@@ -1,117 +1,165 @@
-import React, { useState } from 'react';
+// src/App.js (React Frontend)
 
-// This is your main functional component. 
-// In React, components are the building blocks of your UI.
-// We are using Tailwind CSS classes for styling.
+import React, { useState, useEffect } from 'react';
+import './App.css';
 
-const App = () => {
-  // Use state to manage the 'Follow' status
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followerCount, setFollowerCount] = useState(345);
+const API_BASE_URL = 'http://localhost:3001';
 
-  const handleFollowToggle = () => {
-    setIsFollowing(prev => !prev);
-    setFollowerCount(prev => prev + (isFollowing ? -1 : 1));
+// --- Component 1: Showcasing GetNewsFeed Stored Procedure ---
+const NewsFeed = ({ currentUserId }) => {
+  const [feed, setFeed] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchFeed = async () => {
+      if (!currentUserId) return;
+      setLoading(true);
+      try {
+        // Calls the /api/feed/:userId endpoint
+        const response = await fetch(`${API_BASE_URL}/api/feed/${currentUserId}`);
+        const data = await response.json();
+        setFeed(data);
+      } catch (error) {
+        console.error("Failed to fetch feed:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFeed();
+  }, [currentUserId]);
+
+  // Function to call the Like Trigger endpoint
+  const handleLike = async (postId) => {
+    try {
+        // Calls the /api/post/:postId/like/:userId endpoint
+      const response = await fetch(`${API_BASE_URL}/api/post/${postId}/like/${currentUserId}`, { method: 'POST' });
+      if (response.ok) {
+        alert(`Liked Post ${postId}. SQL Trigger (tr_LikeTable_AfterInsert) fired!`);
+        // Re-fetch the feed to see the updated LikeCount (thanks to the trigger)
+        // NOTE: In a real app, you'd update state locally for better performance.
+        window.location.reload(); 
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message);
+      }
+    } catch (error) {
+      alert("Failed to process like.");
+    }
   };
 
-  // Inline SVG for the 'Share' icon (replaces reliance on external icon libraries)
-  const ShareIcon = () => (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className="w-5 h-5"
-    >
-      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-      <polyline points="16 6 12 2 8 6" />
-      <line x1="12" y1="2" x2="12" y2="15" />
-    </svg>
-  );
 
   return (
-    // Main container is centered and uses Inter font (default for Tailwind)
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      {/* Social Profile Card */}
-      <div 
-        className="w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden transform hover:scale-[1.02] transition duration-300 ease-in-out"
-        style={{ fontFamily: 'Inter, sans-serif' }}
-      >
-        
-        {/* Header Background Image */}
-        <div className="h-24 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 relative">
-          {/* Placeholder for Banner Image */}
-          <div className="absolute inset-0 bg-black/10 flex items-center justify-center text-white text-sm font-semibold">
-            Social Banner Area
-          </div>
-        </div>
-
-        {/* Profile Details Section */}
-        <div className="p-6 pt-0 text-center">
-          
-          {/* Avatar */}
-          <img
-            className="w-24 h-24 rounded-full mx-auto -mt-12 border-4 border-white object-cover shadow-lg"
-            src="https://placehold.co/96x96/6C63FF/ffffff?text=U"
-            alt="User Avatar"
-            onError={(e) => { e.target.onerror = null; e.target.src="https://placehold.co/96x96/6C63FF/ffffff?text=User"}}
-          />
-
-          {/* User Info */}
-          <h1 className="text-2xl font-bold text-gray-900 mt-3">Dev Starter</h1>
-          <p className="text-sm text-indigo-600 font-medium">@beginner_dev</p>
-          <p className="text-gray-500 text-sm mt-2 leading-relaxed">
-            Building my first social media front end with React and Vite! Frontend enthusiast and quick learner.
-          </p>
-          
-          {/* Stats */}
-          <div className="flex justify-around items-center mt-4 border-t border-b py-3 bg-gray-50 rounded-lg">
-            <div className="text-center">
-              <p className="text-lg font-bold text-gray-800">12</p>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Posts</p>
+    <div className="feed-container">
+      <h2>Friends' Feed for User {currentUserId}</h2>
+      <p className="subtext">
+        (Loaded via **`CALL GetNewsFeed(${currentUserId})`** Stored Procedure)
+      </p>
+      {loading && <p>Loading...</p>}
+      <div className="posts-grid">
+        {feed.length === 0 && !loading && <p>No posts from you or your accepted friends.</p>}
+        {feed.map((post) => (
+          <div key={post.PostID} className="post-card">
+            <h4>{post.Author} {post.Author === 'alice_s' ? ' (You)' : ''}</h4>
+            <p className="content">{post.Content}</p>
+            <p className="group">{post.GroupName ? `Group: ${post.GroupName}` : 'Personal Post'}</p>
+            <div className="post-actions">
+                <span className="count-showcase">
+                    Likes: **{post.LikeCount}** | Comments: **{post.CommentCount}**
+                    <span className="trigger-note">(Updated by Triggers)</span>
+                </span>
+                <button onClick={() => handleLike(post.PostID)}>
+                    👍 Like (Test Trigger)
+                </button>
             </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-gray-800">{followerCount.toLocaleString()}</p>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Followers</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-gray-800">58</p>
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Following</p>
-            </div>
+            <p className="timestamp">{new Date(post.Timestamp).toLocaleString()}</p>
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex space-x-3 mt-6">
-            <button
-              onClick={handleFollowToggle}
-              className={`flex-1 py-3 text-sm font-semibold rounded-full transition duration-200 shadow-md ${
-                isFollowing
-                  ? 'bg-white text-indigo-600 border border-indigo-600 hover:bg-indigo-50 hover:shadow-lg'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg'
-              }`}
-            >
-              {isFollowing ? 'Following' : 'Follow'}
-            </button>
-            <button
-              className="py-3 px-4 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition duration-200 flex items-center justify-center"
-              onClick={() => {
-                console.log("Share logic executed. Sharing profile link...");
-                // In a real app, this would open a share dialog.
-                // We'll use a simple alert replacement via console log for now.
-              }}
-            >
-              <ShareIcon />
-            </button>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
 };
+
+
+// --- Component 2: Showcasing CalculateAge Function ---
+const UserAgeDisplay = ({ userId }) => {
+    const [userInfo, setUserInfo] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchAge = async () => {
+            if (!userId) return;
+            setLoading(true);
+            try {
+                 // Calls the /api/user/:userId/age endpoint
+                const response = await fetch(`${API_BASE_URL}/api/user/${userId}/age`);
+                const data = await response.json();
+                setUserInfo(data);
+            } catch (error) {
+                console.error("Failed to fetch user age:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAge();
+    }, [userId]);
+
+    if (loading) return <div>Loading Age...</div>;
+    if (!userInfo) return null;
+
+    return (
+        <div className="age-box">
+            <h4>User: {userInfo.Name} (@{userInfo.Username})</h4>
+            <p>Gender: {userInfo.Gender}</p>
+            <p className="age-value">
+                Age: **{userInfo.Age}** Years Old
+                <span className="function-note">
+                    (Calculated live via **`CalculateAge(DOB)`** SQL Function)
+                </span>
+            </p>
+        </div>
+    );
+};
+
+
+// --- Main App Component ---
+function App() {
+  // Use Alice (UserID 1) as the default user for the showcase
+  const [currentUserId, setCurrentUserId] = useState(1);
+  const userOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // All UserIDs
+
+  return (
+    <div className="App">
+      <h1>Social Network SQL Showcase</h1>
+      <div className="user-select-bar">
+        <label>
+          Select User to View Feed As:
+          <select 
+            value={currentUserId} 
+            onChange={(e) => setCurrentUserId(parseInt(e.target.value))}
+          >
+            {userOptions.map(id => (
+              <option key={id} value={id}>User ID {id}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <hr />
+
+      <div className="showcase-section">
+        <h3>Function Showcase: Live Age Calculation</h3>
+        <UserAgeDisplay userId={currentUserId} />
+      </div>
+
+      <hr />
+
+      <div className="showcase-section">
+        <h3>Procedure & Trigger Showcase: News Feed Interaction</h3>
+        <NewsFeed currentUserId={currentUserId} />
+      </div>
+
+    </div>
+  );
+}
 
 export default App;

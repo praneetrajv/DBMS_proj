@@ -1,0 +1,84 @@
+/* src/App.css */
+
+.App {
+    font-family: sans-serif;
+    padding: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+h1 { color: #333; }
+h2 { color: #555; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+h3 { color: #007bff; margin-top: 30px; }
+
+.user-select-bar {
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.posts-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.post-card {
+    border: 1px solid #ccc;
+    padding: 15px;
+    border-radius: 5px;
+    flex: 1 1 300px; /* Flexible width */
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.content {
+    font-style: italic;
+    color: #444;
+}
+
+.group {
+    font-size: 0.9em;
+    color: #007bff;
+    margin-bottom: 10px;
+}
+
+.timestamp {
+    font-size: 0.8em;
+    color: #999;
+    margin-top: 10px;
+}
+
+.post-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px dashed #eee;
+}
+
+.count-showcase {
+    font-weight: bold;
+    color: #28a745;
+}
+
+.trigger-note, .function-note {
+    font-size: 0.7em;
+    font-weight: normal;
+    color: #6c757d;
+    margin-left: 5px;
+}
+
+.age-box {
+    border: 2px solid #ffc107;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: #fff3cd;
+}
+
+.age-value {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #856404;
+}
