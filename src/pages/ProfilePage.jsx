@@ -24,7 +24,11 @@ const ProfilePage = () => {
     const [userPosts, setUserPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [pendingRequests, setPendingRequests] = useState([]);
+    const [outgoingRequests, setOutgoingRequests] = useState([]);
     const [selectedPostId, setSelectedPostId] = useState(null);
+    const [canViewProfile, setCanViewProfile] = useState(true);
+    const [showSettings, setShowSettings] = useState(false);
+    const [profileType, setProfileType] = useState('Public');
 
     const isCurrentUserProfile = userId === profileId;
 
@@ -54,11 +58,30 @@ const ProfilePage = () => {
                 const data = await response.json();
                 setPendingRequests(data);
             } else {
-                console.error("Failed to fetch pending requests.");
                 setPendingRequests([]);
             }
         } catch (error) {
             console.error("Network error fetching pending requests:", error);
+        }
+    };
+
+    const fetchOutgoingRequests = async () => {
+        if (!isCurrentUserProfile) {
+            setOutgoingRequests([]);
+            return;
+        }
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/friendship/outgoing-requests`, {
+                headers: getAuthHeaders(),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setOutgoingRequests(data);
+            } else {
+                setOutgoingRequests([]);
+            }
+        } catch (error) {
+            console.error("Network error fetching outgoing requests:", error);
         }
     };
 
@@ -79,6 +102,28 @@ const ProfilePage = () => {
         }
     };
 
+    const checkViewPermissions = async () => {
+        if (isCurrentUserProfile) {
+            setCanViewProfile(true);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/user/${profileId}/can-view`, {
+                headers: getAuthHeaders(),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setCanViewProfile(data.canView);
+            } else {
+                setCanViewProfile(false);
+            }
+        } catch (error) {
+            console.error("Error checking view permissions:", error);
+            setCanViewProfile(false);
+        }
+    };
+
     const fetchProfileDetails = async () => {
         if (!userId || !profileId) return;
         setLoading(true);
@@ -90,6 +135,7 @@ const ProfilePage = () => {
             if (profileResponse.ok) {
                 const data = await profileResponse.json();
                 setProfileData(data);
+                setProfileType(data.ProfileType || 'Public');
             } else {
                 setProfileData(null);
             }
@@ -97,6 +143,8 @@ const ProfilePage = () => {
             console.error("Error fetching profile data:", error);
             setProfileData(null);
         }
+
+        await checkViewPermissions();
 
         if (isCurrentUserProfile) {
             setFriendshipStatus(STATUS.SELF);
@@ -126,6 +174,7 @@ const ProfilePage = () => {
         const fetchAllDetails = () => {
             fetchProfileDetails();
             fetchPendingRequests();
+            fetchOutgoingRequests();
         };
         fetchAllDetails();
     }, [profileId, userId]);
@@ -165,10 +214,37 @@ const ProfilePage = () => {
             if (response.ok || response.status === 409) {
                 fetchProfileDetails();
                 fetchPendingRequests();
+                fetchOutgoingRequests();
             }
 
         } catch (error) {
             alert("Network error during friendship action.");
+        }
+    };
+
+    const handleUpdateSettings = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/user/${userId}/settings`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders(),
+                },
+                body: JSON.stringify({ profileType }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                setShowSettings(false);
+                fetchProfileDetails();
+            } else {
+                alert(data.message || "Failed to update settings.");
+            }
+        } catch (error) {
+            console.error("Error updating settings:", error);
+            alert("Network error during settings update.");
         }
     };
 
@@ -203,17 +279,30 @@ const ProfilePage = () => {
     };
 
     const getButtonText = () => {
-        switch (friendshipStatus) {
-            case STATUS.ACCEPTED:
-                return 'Unfriend';
-            case STATUS.PENDING_RECEIVED:
-                return 'Accept Request';
-            case STATUS.PENDING_SENT:
-                return 'Cancel Request';
-            case STATUS.NOT_FRIENDS:
-                return 'Add Friend';
-            default:
-                return 'Action';
+        if (profileData?.ProfileType === 'Public') {
+            switch (friendshipStatus) {
+                case STATUS.ACCEPTED:
+                    return 'Following';
+                case STATUS.PENDING_SENT:
+                    return 'Follow Request Sent';
+                case STATUS.NOT_FRIENDS:
+                    return 'Follow';
+                default:
+                    return 'Follow';
+            }
+        } else {
+            switch (friendshipStatus) {
+                case STATUS.ACCEPTED:
+                    return 'Unfriend';
+                case STATUS.PENDING_RECEIVED:
+                    return 'Accept Request';
+                case STATUS.PENDING_SENT:
+                    return 'Cancel Request';
+                case STATUS.NOT_FRIENDS:
+                    return 'Add Friend';
+                default:
+                    return 'Action';
+            }
         }
     };
 
@@ -225,31 +314,93 @@ const ProfilePage = () => {
         return <div className="page-container">User Not Found or Error Loading Profile.</div>;
     }
 
+    if (!canViewProfile && !isCurrentUserProfile) {
+        return (
+            <div className="page-container">
+                <div className="private-profile-notice">
+                    <h1>🔒 Private Profile</h1>
+                    <p>This profile is private. Send a friend request to view their content.</p>
+                    <button
+                        className="btn-friend"
+                        onClick={() => handleToggleFollow(null, null)}
+                    >
+                        {getButtonText()}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="page-container profile-layout">
             <div className="profile-header">
-                <h1>{profileData.Name} {isCurrentUserProfile && '(You)'}</h1>
-                <p className="subtext">@{profileData.Username} | User ID: <strong>{profileId}</strong></p>
-                <p className="subtext">Email: {profileData.Email} | Gender: {profileData.Gender}</p>
+                <div>
+                    <h1>
+                        {profileData.Name} {isCurrentUserProfile && '(You)'}
+                        {profileData.ProfileType === 'Private' && ' 🔒'}
+                    </h1>
+                    <p className="subtext">@{profileData.Username} | User ID: <strong>{profileId}</strong></p>
+                    <p className="subtext">Email: {profileData.Email} | Gender: {profileData.Gender}</p>
+                    <p className="subtext">
+                        Profile Type: <strong>{profileData.ProfileType}</strong>
+                    </p>
+                </div>
 
-                {!isCurrentUserProfile && (
+                {isCurrentUserProfile ? (
+                    <button
+                        className="btn-settings"
+                        onClick={() => setShowSettings(!showSettings)}
+                    >
+                        ⚙️ Settings
+                    </button>
+                ) : (
                     <button
                         className={`btn-${friendshipStatus === STATUS.ACCEPTED ? 'unfriend' :
                             friendshipStatus === STATUS.PENDING_RECEIVED ? 'accept' : 'friend'}`}
                         onClick={() => handleToggleFollow(null, null)}
                     >
                         {getButtonText()}
-                        {friendshipStatus === STATUS.PENDING_SENT && " (Sent)"}
-                        {friendshipStatus === STATUS.PENDING_RECEIVED && " (Received)"}
                     </button>
                 )}
             </div>
+
+            {showSettings && isCurrentUserProfile && (
+                <div className="settings-panel">
+                    <h3>⚙️ Profile Settings</h3>
+                    <div className="setting-item">
+                        <label>
+                            <strong>Profile Type:</strong>
+                            <select
+                                value={profileType}
+                                onChange={(e) => setProfileType(e.target.value)}
+                                className="profile-type-select"
+                            >
+                                <option value="Public">Public - Anyone can view and follow</option>
+                                <option value="Private">Private - Requires friend request</option>
+                            </select>
+                        </label>
+                        <p className="setting-description">
+                            {profileType === 'Public' 
+                                ? '✓ Your profile and posts are visible to everyone'
+                                : '🔒 Only friends can view your profile and posts'}
+                        </p>
+                    </div>
+                    <div className="setting-actions">
+                        <button onClick={handleUpdateSettings} className="btn-save">
+                            Save Changes
+                        </button>
+                        <button onClick={() => setShowSettings(false)} className="btn-cancel">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <hr />
 
             {isCurrentUserProfile && pendingRequests.length > 0 && (
                 <div className="pending-requests-section">
-                    <h2>📥 Pending Friend Requests ({pendingRequests.length})</h2>
+                    <h2>📥 Incoming Friend Requests ({pendingRequests.length})</h2>
                     <ul>
                         {pendingRequests.map(request => (
                             <li key={request.SenderID}>
@@ -273,10 +424,36 @@ const ProfilePage = () => {
                 </div>
             )}
 
-            {isCurrentUserProfile && pendingRequests.length === 0 && (
+            {isCurrentUserProfile && outgoingRequests.length > 0 && (
+                <div className="outgoing-requests-section">
+                    <h2>📤 Outgoing Friend Requests ({outgoingRequests.length})</h2>
+                    <ul>
+                        {outgoingRequests.map(request => (
+                            <li key={request.ReceiverID}>
+                                <span style={{ fontSize: '1.1em' }}>
+                                    <strong>{request.ReceiverName}</strong> (@{request.ReceiverUsername})
+                                    <small style={{ marginLeft: '10px', color: '#888' }}>
+                                        sent on {new Date(request.SinceDate).toLocaleDateString()}
+                                    </small>
+                                </span>
+                                <div>
+                                    <button 
+                                        onClick={() => handleToggleFollow('cancel', request.ReceiverID)}
+                                        className="btn-cancel-request"
+                                    >
+                                        Cancel Request
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {isCurrentUserProfile && pendingRequests.length === 0 && outgoingRequests.length === 0 && (
                 <div className="pending-requests-section">
-                    <h2>📥 Pending Friend Requests (0)</h2>
-                    <p>No new pending requests.</p>
+                    <h2>📬 Friend Requests</h2>
+                    <p>No pending requests.</p>
                 </div>
             )}
 

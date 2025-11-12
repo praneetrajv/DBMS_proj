@@ -1121,3 +1121,335 @@ strong {
     font-size: 0.75rem;
     margin-top: 0.5rem;
 }
+
+/* ----------------------------------------------- */
+
+/* Add these styles to your existing src/styles.css file */
+
+/* Profile Settings Panel */
+.btn-settings {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.btn-settings:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.settings-panel {
+    background: #f8f9ff;
+    padding: 2rem;
+    border-radius: 15px;
+    margin: 2rem 0;
+    border: 2px solid #e8eaf6;
+}
+
+.settings-panel h3 {
+    color: #667eea;
+    margin-bottom: 1.5rem;
+}
+
+.setting-item {
+    margin-bottom: 1.5rem;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.setting-item strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.profile-type-select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e8eaf6;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.profile-type-select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.setting-description {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: #666;
+    padding: 0.75rem;
+    background: white;
+    border-radius: 8px;
+}
+
+.setting-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-save {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-save:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.btn-cancel {
+    background: #f0f0f0;
+    color: #555;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+    background: #e0e0e0;
+}
+
+/* Outgoing Requests Section */
+.outgoing-requests-section {
+    background: #fff3cd;
+    padding: 2rem;
+    border-radius: 15px;
+    margin: 2rem 0;
+    border: 2px solid #ffeaa7;
+}
+
+.outgoing-requests-section h2 {
+    color: #856404;
+    margin-bottom: 1.5rem;
+}
+
+.outgoing-requests-section ul {
+    list-style: none;
+    padding: 0;
+}
+
+.outgoing-requests-section li {
+    background: white;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.btn-cancel-request {
+    background: #f44336;
+    color: white;
+    border: none;
+    padding: 0.5rem 1.25rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel-request:hover {
+    background: #d32f2f;
+    transform: translateY(-2px);
+}
+
+/* Private Profile Notice */
+.private-profile-notice {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: #f8f9ff;
+    border-radius: 15px;
+    border: 2px solid #e8eaf6;
+}
+
+.private-profile-notice h1 {
+    color: #667eea;
+    margin-bottom: 1rem;
+}
+
+.private-profile-notice p {
+    color: #666;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+/* Create Group Section */
+.groups-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+}
+
+.btn-create-group {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.btn-create-group:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.create-group-form {
+    background: #f8f9ff;
+    padding: 2rem;
+    border-radius: 15px;
+    margin: 2rem 0;
+    border: 2px solid #e8eaf6;
+}
+
+.create-group-form h3 {
+    color: #667eea;
+    margin-bottom: 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e8eaf6;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-create {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-create:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.btn-cancel-form {
+    background: #f0f0f0;
+    color: #555;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel-form:hover {
+    background: #e0e0e0;
+}
+
+/* Responsive Design Updates */
+@media (max-width: 768px) {
+    .groups-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .btn-create-group {
+        width: 100%;
+    }
+
+    .setting-actions,
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .setting-actions button,
+    .form-actions button {
+        width: 100%;
+    }
+
+    .outgoing-requests-section li,
+    .pending-requests-section li {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    .outgoing-requests-section li > div,
+    .pending-requests-section li > div {
+        width: 100%;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .outgoing-requests-section button,
+    .pending-requests-section button {
+        flex: 1;
+    }
+}
