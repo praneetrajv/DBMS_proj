@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 
 const API_BASE_URL = 'http://localhost:3001';
 
 const GroupsPage = () => {
     const { userId, getAuthHeaders } = useAuth();
+    const navigate = useNavigate();
     const [allGroups, setAllGroups] = useState([]);
     const [myGroups, setMyGroups] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showCreateForm, setShowCreateForm] = useState(false);
+    const [newGroupData, setNewGroupData] = useState({
+        name: '',
+        description: ''
+    });
 
     const fetchGroups = async () => {
         setLoading(true);
@@ -52,7 +58,7 @@ const GroupsPage = () => {
             alert(data.message);
 
             if (response.ok) {
-                fetchGroups(); // Refresh the groups
+                fetchGroups();
             }
         } catch (error) {
             console.error("Error joining group:", error);
@@ -75,11 +81,47 @@ const GroupsPage = () => {
             alert(data.message);
 
             if (response.ok) {
-                fetchGroups(); // Refresh the groups
+                fetchGroups();
             }
         } catch (error) {
             console.error("Error leaving group:", error);
             alert("Network error during leave action.");
+        }
+    };
+
+    const handleCreateGroup = async (e) => {
+        e.preventDefault();
+
+        if (!newGroupData.name.trim() || !newGroupData.description.trim()) {
+            alert("Please fill in all fields.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/groups/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders(),
+                },
+                body: JSON.stringify(newGroupData),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                setNewGroupData({ name: '', description: '' });
+                setShowCreateForm(false);
+                fetchGroups();
+                // Navigate to the newly created group
+                navigate(`/group/${data.groupId}`);
+            } else {
+                alert(data.message || "Failed to create group.");
+            }
+        } catch (error) {
+            console.error("Error creating group:", error);
+            alert("Network error during group creation.");
         }
     };
 
@@ -93,11 +135,71 @@ const GroupsPage = () => {
 
     return (
         <div className="page-container">
-            <h1>👥 Groups</h1>
-            <p className="subtext">Discover and join communities</p>
+            <div className="groups-header">
+                <div>
+                    <h1>👥 Groups</h1>
+                    <p className="subtext">Discover and join communities</p>
+                </div>
+                <button 
+                    className="btn-create-group"
+                    onClick={() => setShowCreateForm(!showCreateForm)}
+                >
+                    ➕ Create New Group
+                </button>
+            </div>
+
+            {showCreateForm && (
+                <div className="create-group-form">
+                    <h3>Create a New Group</h3>
+                    <form onSubmit={handleCreateGroup}>
+                        <div className="form-group">
+                            <label>Group Name *</label>
+                            <input
+                                type="text"
+                                value={newGroupData.name}
+                                onChange={(e) => setNewGroupData({
+                                    ...newGroupData,
+                                    name: e.target.value
+                                })}
+                                placeholder="Enter group name"
+                                maxLength="100"
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Description *</label>
+                            <textarea
+                                value={newGroupData.description}
+                                onChange={(e) => setNewGroupData({
+                                    ...newGroupData,
+                                    description: e.target.value
+                                })}
+                                placeholder="Describe what this group is about..."
+                                rows="4"
+                                required
+                            />
+                        </div>
+                        <div className="form-actions">
+                            <button type="submit" className="btn-create">
+                                Create Group
+                            </button>
+                            <button 
+                                type="button" 
+                                className="btn-cancel-form"
+                                onClick={() => {
+                                    setShowCreateForm(false);
+                                    setNewGroupData({ name: '', description: '' });
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             {/* My Groups Section */}
-            <section style={{ marginBottom: '3rem' }}>
+            <section style={{ marginBottom: '3rem', marginTop: '2rem' }}>
                 <h2 style={{ color: '#667eea', marginBottom: '1rem' }}>My Groups ({myGroups.length})</h2>
                 {myGroups.length === 0 ? (
                     <p className="empty-state">You haven't joined any groups yet.</p>

@@ -284,3 +284,58 @@ INSERT INTO Comment (UserID, PostID, Content) VALUES
 (6, 10, 'I think it''ll automate the boring stuff, letting developers focus on complex design.'),
 (9, 2, 'If you liked that, you should check out the author''s previous work, "The Silent City."'),
 (1, 8, 'Very true! A great way to start the weekend.');
+
+/* ------------------------------------------------------ */
+
+-- Add ProfileType column to User table
+ALTER TABLE User ADD COLUMN ProfileType ENUM('Public', 'Private') DEFAULT 'Public';
+
+-- Update the GetNewsFeed procedure to handle public/private profiles
+DROP PROCEDURE IF EXISTS GetNewsFeed;
+
+DELIMITER //
+CREATE PROCEDURE GetNewsFeed(IN input_user_id INT)
+BEGIN
+    SELECT 
+        P.PostID,
+        P.UserID,
+        U.Name AS Author,
+        P.Content,
+        P.Timestamp,
+        P.LikeCount,
+        P.CommentCount,
+        G.Name AS GroupName
+    FROM Post P
+    JOIN User U ON P.UserID = U.UserID
+    LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
+    WHERE 
+        -- User's own posts
+        P.UserID = input_user_id
+        OR
+        -- Posts from public profiles
+        (U.ProfileType = 'Public' AND P.GroupID IS NULL)
+        OR
+        -- Posts from accepted friends (private profiles)
+        (P.UserID IN (
+            SELECT UserID2 FROM Friendship 
+            WHERE UserID1 = input_user_id AND Status = 'Accepted'
+            UNION
+            SELECT UserID1 FROM Friendship 
+            WHERE UserID2 = input_user_id AND Status = 'Accepted'
+        ))
+        OR
+        -- Posts from groups the user is a member of
+        P.GroupID IN (
+            SELECT GroupID FROM GroupMembership WHERE UserID = input_user_id
+        )
+    ORDER BY P.Timestamp DESC;
+END//
+DELIMITER ;
+
+-- Add CreatedBy column to GroupTable
+ALTER TABLE GroupTable ADD COLUMN CreatedBy INT;
+ALTER TABLE GroupTable ADD COLUMN CreatedDate DATE DEFAULT (CURRENT_DATE);
+ALTER TABLE GroupTable ADD CONSTRAINT fk_group_creator 
+    FOREIGN KEY (CreatedBy) REFERENCES User(UserID) 
+    ON DELETE SET NULL 
+    ON UPDATE CASCADE;
