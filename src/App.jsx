@@ -67,7 +67,7 @@ function App() {
                             <NewsFeed currentUserId={userId} />
                         </ProtectedRoute>
                     } />
-                    
+
                     <Route path="/profile/:userId" element={
                         <ProtectedRoute>
                             <ProfilePage currentUserId={userId} />

@@ -10,21 +10,25 @@ router.get("/:profileId/follow-status", async (req, res) => {
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      `SELECT Status, UserID1 FROM Friendship 
-       WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)`,
-      [currentUserId, profileId, profileId, currentUserId],
+
+    const [youToThem] = await connection.execute(
+      `SELECT Status FROM Friendship 
+       WHERE UserID1 = ? AND UserID2 = ?`,
+      [currentUserId, profileId],
     );
+
+    const [themToYou] = await connection.execute(
+      `SELECT Status FROM Friendship 
+       WHERE UserID1 = ? AND UserID2 = ?`,
+      [profileId, currentUserId],
+    );
+
     await connection.end();
 
-    if (rows.length > 0) {
-      res.json({
-        status: rows[0].Status,
-        rowInitiatorId: rows[0].UserID1,
-      });
-    } else {
-      res.json({ status: null, rowInitiatorId: null });
-    }
+    res.json({
+      yourStatus: youToThem.length > 0 ? youToThem[0].Status : null,
+      theirStatus: themToYou.length > 0 ? themToYou[0].Status : null,
+    });
   } catch (error) {
     console.error("Error checking follow status:", error);
     res.status(500).json({ message: "Failed to check follow status." });
@@ -45,150 +49,159 @@ router.post("/:profileId/toggle-friendship", async (req, res) => {
   try {
     const connection = await mysql.createConnection(dbConfig);
 
-    const [profileRows] = await connection.execute(
+    // Get target profile type
+    const [[targetProfile]] = await connection.execute(
       "SELECT ProfileType FROM User WHERE UserID = ?",
       [targetId],
     );
 
-    if (profileRows.length === 0) {
+    if (!targetProfile) {
       await connection.end();
       return res.status(404).json({ message: "User not found." });
     }
 
-    const isPublicProfile = profileRows[0].ProfileType === "Public";
+    const isTargetPublic = targetProfile.ProfileType === "Public";
 
-    const [existing] = await connection.execute(
-      `SELECT Status, UserID1 
-       FROM Friendship 
-       WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)`,
-      [initiatorId, targetId, targetId, initiatorId],
+    // ------------------------------------------------------
+    // Separate A→B and B→A rows
+    // ------------------------------------------------------
+    const [[yourRow]] = await connection.execute(
+      "SELECT * FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
+      [initiatorId, targetId],
     );
 
-    const status = existing.length > 0 ? existing[0].Status : "None";
-    const senderIdInRow = status !== "None" ? existing[0].UserID1 : null;
-    const isInitiatorTheSender = senderIdInRow && senderIdInRow === initiatorId;
+    const [[theirRow]] = await connection.execute(
+      "SELECT * FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
+      [targetId, initiatorId],
+    );
 
-    let actionMessage = "No action taken.";
+    const yourStatus = yourRow ? yourRow.Status : "None";
+    const theirStatus = theirRow ? theirRow.Status : "None";
+
+    let message = "";
     let success = true;
 
+    // ------------------------------------------------------
+    // ACTION HANDLING (Instagram Logic)
+    // ------------------------------------------------------
+
     switch (action) {
+      // ----------------------------------------------------
+      // SEND FOLLOW
+      // ----------------------------------------------------
       case "send":
-        if (status === "None") {
-          const relationshipStatus = isPublicProfile ? "Accepted" : "Pending";
-          await connection.execute(
-            "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, ?, CURRENT_DATE())",
-            [initiatorId, targetId, relationshipStatus],
-          );
-          actionMessage = isPublicProfile
-            ? "Now following!"
-            : "Friend request sent (Pending).";
-        } else if (!isInitiatorTheSender) {
-          const relationshipStatus = isPublicProfile ? "Accepted" : "Pending";
-          await connection.execute(
-            "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, ?, CURRENT_DATE())",
-            [initiatorId, targetId, relationshipStatus],
-          );
-          actionMessage = isPublicProfile
-            ? "Now following!"
-            : "Friend request sent (Pending).";
-        } else {
-          actionMessage =
-            "You already sent a request or are already following this user.";
+        if (yourStatus !== "None") {
+          message = "You already follow or requested.";
           success = false;
+          break;
+        }
+
+        if (isTargetPublic) {
+          // Instant follow
+          await connection.execute(
+            "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, 'Accepted', CURRENT_DATE())",
+            [initiatorId, targetId],
+          );
+          message = "Followed successfully!";
+        } else {
+          // Private → pending
+          await connection.execute(
+            "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, 'Pending', CURRENT_DATE())",
+            [initiatorId, targetId],
+          );
+          message = "Follow request sent!";
         }
         break;
 
+      // ----------------------------------------------------
+      // ACCEPT REQUEST (only if THEY sent you a pending)
+      // ----------------------------------------------------
       case "accept":
-        if (status === "Pending" && !isInitiatorTheSender) {
-          await connection.execute(
-            "UPDATE Friendship SET Status = 'Accepted', SinceDate = CURRENT_DATE() WHERE UserID1 = ? AND UserID2 = ?",
-            [senderIdInRow, initiatorId],
-          );
-          actionMessage = "Friend request accepted!";
-        } else {
-          actionMessage =
-            "Cannot accept: no pending request received or you sent the request.";
+        if (theirStatus !== "Pending") {
+          message = "No incoming request to accept.";
           success = false;
+          break;
         }
+
+        await connection.execute(
+          "UPDATE Friendship SET Status = 'Accepted', SinceDate = CURRENT_DATE() WHERE UserID1 = ? AND UserID2 = ?",
+          [targetId, initiatorId],
+        );
+
+        message = "Request accepted!";
         break;
 
-      case "cancel":
-        if (status === "Pending" && isInitiatorTheSender) {
-          await connection.execute(
-            "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
-            [initiatorId, targetId],
-          );
-          actionMessage = "Friend request cancelled.";
-        } else if (
-          status === "Accepted" &&
-          isInitiatorTheSender &&
-          isPublicProfile
-        ) {
-          await connection.execute(
-            "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
-            [initiatorId, targetId],
-          );
-          actionMessage = "Unfollowed successfully.";
-        } else {
-          actionMessage =
-            "Cannot cancel: not the sender or request is not pending.";
-          success = false;
-        }
-        break;
-
+      // ----------------------------------------------------
+      // DECLINE REQUEST (only if THEY sent it)
+      // ----------------------------------------------------
       case "decline":
-        if (status === "Pending" && !isInitiatorTheSender) {
-          await connection.execute(
-            "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
-            [senderIdInRow, initiatorId],
-          );
-          actionMessage = "Friend request declined.";
-        } else {
-          actionMessage =
-            "Cannot decline: no pending request received or you sent the request.";
+        if (theirStatus !== "Pending") {
+          message = "No incoming request to decline.";
           success = false;
+          break;
         }
+
+        await connection.execute(
+          "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
+          [targetId, initiatorId],
+        );
+
+        message = "Request declined.";
         break;
 
-      case "unfriend":
-        const [yourFollow] = await connection.execute(
-          "SELECT Status FROM Friendship WHERE UserID1 = ? AND UserID2 = ? AND Status = 'Accepted'",
+      // ----------------------------------------------------
+      // CANCEL OUTGOING REQUEST
+      // ----------------------------------------------------
+      case "cancel":
+        if (yourStatus !== "Pending") {
+          message = "No pending outgoing request to cancel.";
+          success = false;
+          break;
+        }
+
+        await connection.execute(
+          "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
           [initiatorId, targetId],
         );
 
-        if (yourFollow.length > 0) {
-          await connection.execute(
-            "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
-            [initiatorId, targetId],
-          );
-          actionMessage = isPublicProfile
-            ? "Unfollowed successfully."
-            : "Unfriended successfully.";
-        } else {
-          actionMessage = "You are not following this user.";
-          success = false;
-        }
+        message = "Request cancelled.";
         break;
 
+      // ----------------------------------------------------
+      // UNFRIEND / UNFOLLOW
+      // ----------------------------------------------------
+      case "unfriend":
+        if (yourStatus !== "Accepted") {
+          message = "You are not following this user.";
+          success = false;
+          break;
+        }
+
+        await connection.execute(
+          "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
+          [initiatorId, targetId],
+        );
+
+        message = "Unfollowed successfully.";
+        break;
+
+      // ----------------------------------------------------
       default:
-        actionMessage = "Invalid action specified.";
         success = false;
+        message = "Invalid action.";
     }
 
     await connection.end();
-    if (success) {
-      res.status(200).json({ message: actionMessage });
-    } else {
-      res.status(400).json({ message: actionMessage });
+
+    if (!success) return res.status(400).json({ message });
+    return res.status(200).json({ message });
+  } catch (err) {
+    console.error(err);
+
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ message: "Duplicate follow row." });
     }
-  } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") {
-      return res
-        .status(409)
-        .json({ message: "A friendship request already exists." });
-    }
-    console.error(`Error processing friendship action:`, error);
-    res.status(500).json({ message: "Could not update friendship status." });
+    return res.status(500).json({ message: "Server error." });
   }
 });
 

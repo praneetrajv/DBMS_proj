@@ -12,7 +12,7 @@ const SearchBar = () => {
     const handleSearch = async (e) => {
         const q = e.target.value;
         setQuery(q);
-        
+
         if (q.length < 2) {
             setResults({ users: [], groups: [] });
             return;
@@ -22,12 +22,12 @@ const SearchBar = () => {
             const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`, {
                 headers: getAuthHeaders(),
             });
-            
+
             if (!response.ok) {
                 setResults({ users: [], groups: [] });
                 return;
             }
-            
+
             const data = await response.json();
             setResults(data);
         } catch (error) {
@@ -60,8 +60,8 @@ const SearchBar = () => {
                             </li>
                             {results.users.map(user => (
                                 <li key={`user-${user.UserID}`} className="search-result-item">
-                                    <Link 
-                                        to={`/profile/${user.UserID}`} 
+                                    <Link
+                                        to={`/profile/${user.UserID}`}
                                         onClick={handleResultClick}
                                     >
                                         <div className="search-result-main">
@@ -73,7 +73,7 @@ const SearchBar = () => {
                             ))}
                         </>
                     )}
-                    
+
                     {results.groups.length > 0 && (
                         <>
                             <li className="search-category-header">
@@ -81,8 +81,8 @@ const SearchBar = () => {
                             </li>
                             {results.groups.map(group => (
                                 <li key={`group-${group.GroupID}`} className="search-result-item">
-                                    <Link 
-                                        to={`/group/${group.GroupID}`} 
+                                    <Link
+                                        to={`/group/${group.GroupID}`}
                                         onClick={handleResultClick}
                                     >
                                         <div className="search-result-main">

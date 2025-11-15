@@ -28,7 +28,8 @@ router.post("/register", async (req, res) => {
     if (error.code === "ER_DUP_ENTRY") {
       if (error.message.includes("Username")) {
         return res.status(409).json({
-          message: "Username already taken. Please choose a different username.",
+          message:
+            "Username already taken. Please choose a different username.",
         });
       } else if (error.message.includes("Email")) {
         return res.status(409).json({

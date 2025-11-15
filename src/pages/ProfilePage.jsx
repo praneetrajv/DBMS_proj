@@ -20,7 +20,14 @@ const ProfilePage = () => {
     const { userId: profileParam } = useParams();
     const profileId = parseInt(profileParam);
 
-    const [friendshipStatus, setFriendshipStatus] = useState(STATUS.NOT_FRIENDS);
+    const isCurrentUserProfile = userId === profileId;
+
+    const [friendshipStatus, setFriendshipStatus] = useState({
+        yourStatus: STATUS.NOT_FRIENDS,
+        theirStatus: STATUS.NOT_FRIENDS
+    });
+
+    const [hasIncomingRequest, setHasIncomingRequest] = useState(false);
     const [profileData, setProfileData] = useState(null);
     const [userPosts, setUserPosts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -34,19 +41,23 @@ const ProfilePage = () => {
     const [followingCount, setFollowingCount] = useState(0);
     const [modalConfig, setModalConfig] = useState(null);
 
-    const isCurrentUserProfile = userId === profileId;
-
+    console.log("DEBUG — friendshipStatus:", friendshipStatus);
     const interpretStatus = (data) => {
-        if (!data || !data.status) return STATUS.NOT_FRIENDS;
-        if (data.status === 'Accepted') return STATUS.ACCEPTED;
-        if (data.status === 'Pending') {
-            if (data.rowInitiatorId === userId) {
-                return STATUS.PENDING_SENT;
-            } else {
-                return STATUS.PENDING_RECEIVED;
-            }
+        console.log(data)
+        let { yourStatus, theirStatus } = data;
+
+        switch (yourStatus) {
+            case null: yourStatus = STATUS.NOT_FRIENDS; break;
+            case "Accepted": yourStatus = STATUS.ACCEPTED; break;
+            case "Pending": yourStatus = STATUS.PENDING_SENT; break;
         }
-        return STATUS.NOT_FRIENDS;
+        switch (theirStatus) {
+            case null: theirStatus = STATUS.NOT_FRIENDS; break;
+            case "Accepted": theirStatus = STATUS.ACCEPTED; break;
+            case "Pending": theirStatus = STATUS.PENDING_RECEIVED; break;
+
+        }
+        return { yourStatus, theirStatus };
     };
 
     const fetchPendingRequests = async () => {
@@ -58,14 +69,9 @@ const ProfilePage = () => {
             const response = await fetch(`${API_BASE_URL}/api/friendship/pending-requests`, {
                 headers: getAuthHeaders(),
             });
-            if (response.ok) {
-                const data = await response.json();
-                setPendingRequests(data);
-            } else {
-                setPendingRequests([]);
-            }
-        } catch (error) {
-            console.error("Network error fetching pending requests:", error);
+            setPendingRequests(response.ok ? await response.json() : []);
+        } catch {
+            setPendingRequests([]);
         }
     };
 
@@ -78,14 +84,9 @@ const ProfilePage = () => {
             const response = await fetch(`${API_BASE_URL}/api/friendship/outgoing-requests`, {
                 headers: getAuthHeaders(),
             });
-            if (response.ok) {
-                const data = await response.json();
-                setOutgoingRequests(data);
-            } else {
-                setOutgoingRequests([]);
-            }
-        } catch (error) {
-            console.error("Network error fetching outgoing requests:", error);
+            setOutgoingRequests(response.ok ? await response.json() : []);
+        } catch {
+            setOutgoingRequests([]);
         }
     };
 
@@ -94,14 +95,8 @@ const ProfilePage = () => {
             const response = await fetch(`${API_BASE_URL}/api/user/${profileId}/posts`, {
                 headers: getAuthHeaders(),
             });
-            if (response.ok) {
-                const data = await response.json();
-                setUserPosts(data);
-            } else {
-                setUserPosts([]);
-            }
-        } catch (error) {
-            console.error("Error fetching user posts:", error);
+            setUserPosts(response.ok ? await response.json() : []);
+        } catch {
             setUserPosts([]);
         }
     };
@@ -111,63 +106,59 @@ const ProfilePage = () => {
             setCanViewProfile(true);
             return;
         }
-
         try {
-            const response = await fetch(`${API_BASE_URL}/api/user/${profileId}/can-view`, {
-                headers: getAuthHeaders(),
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setCanViewProfile(data.canView);
-            } else {
-                setCanViewProfile(false);
-            }
-        } catch (error) {
-            console.error("Error checking view permissions:", error);
+            const response = await fetch(
+                `${API_BASE_URL}/api/user/${profileId}/can-view`,
+                { headers: getAuthHeaders() }
+            );
+            const data = response.ok ? await response.json() : { canView: false };
+            setCanViewProfile(data.canView);
+        } catch {
             setCanViewProfile(false);
         }
     };
 
     const fetchProfileDetails = async () => {
         if (!userId || !profileId) return;
+
         setLoading(true);
 
         try {
-            const profileResponse = await fetch(`${API_BASE_URL}/api/user/${profileId}`, {
+            const res = await fetch(`${API_BASE_URL}/api/user/${profileId}`, {
                 headers: getAuthHeaders(),
             });
-            if (profileResponse.ok) {
-                const data = await profileResponse.json();
+
+            if (res.ok) {
+                const data = await res.json();
                 setProfileData(data);
-                setProfileType(data.ProfileType || 'Public');
-            } else {
-                setProfileData(null);
+                setProfileType(data.ProfileType || "Public");
             }
-        } catch (error) {
-            console.error("Error fetching profile data:", error);
+        } catch {
             setProfileData(null);
         }
 
         await checkViewPermissions();
 
         if (isCurrentUserProfile) {
-            setFriendshipStatus(STATUS.SELF);
+            setFriendshipStatus({
+                yourStatus: STATUS.SELF,
+                theirStatus: STATUS.SELF
+            });
+            setHasIncomingRequest(false);
         } else {
             try {
-                const followResponse = await fetch(`${API_BASE_URL}/api/friendship/${profileId}/follow-status`, {
-                    headers: getAuthHeaders(),
-                });
+                const followResponse = await fetch(
+                    `${API_BASE_URL}/api/friendship/${profileId}/follow-status`,
+                    { headers: getAuthHeaders() }
+                );
 
                 if (followResponse.ok) {
                     const data = await followResponse.json();
-                    setFriendshipStatus(interpretStatus(data));
-                } else {
-                    setFriendshipStatus(STATUS.NOT_FRIENDS);
+                    const status = interpretStatus(data);
+                    setFriendshipStatus(status);
+                    setHasIncomingRequest(status.theirStatus === STATUS.PENDING_RECEIVED);
                 }
-            } catch (error) {
-                console.error("Error fetching follow status:", error);
-                setFriendshipStatus(STATUS.NOT_FRIENDS);
-            }
+            } catch { }
         }
 
         await fetchUserPosts();
@@ -175,29 +166,33 @@ const ProfilePage = () => {
     };
 
     useEffect(() => {
-        const fetchAllDetails = () => {
+        const fetchAll = () => {
             fetchProfileDetails();
             fetchPendingRequests();
             fetchOutgoingRequests();
             fetchFollowerCounts();
         };
-        fetchAllDetails();
-    }, [profileId, userId, isCurrentUserProfile]);
+        fetchAll();
+    }, [profileId, userId]);
 
     const handleToggleFollow = async (explicitAction, targetProfileId) => {
         const targetId = targetProfileId || profileId;
+        console.log(explicitAction)
+        let actionToSend = explicitAction;
+        if (!actionToSend) {
+            const { yourStatus, theirStatus } = friendshipStatus;
 
-        let actionToSend;
-        if (explicitAction) {
-            actionToSend = explicitAction;
-        } else {
-            switch (friendshipStatus) {
-                case STATUS.NOT_FRIENDS: actionToSend = 'send'; break;
-                case STATUS.PENDING_RECEIVED: actionToSend = 'accept'; break;
-                case STATUS.PENDING_SENT: actionToSend = 'cancel'; break;
-                case STATUS.ACCEPTED: actionToSend = 'unfriend'; break;
-                default: return;
-            }
+            if (yourStatus === STATUS.NOT_FRIENDS)
+                actionToSend = 'send';
+
+            else if (yourStatus === STATUS.PENDING_SENT)
+                actionToSend = 'cancel';
+
+            else if (theirStatus === STATUS.PENDING_RECEIVED)
+                actionToSend = 'accept';
+
+            else if (yourStatus === STATUS.ACCEPTED)
+                actionToSend = 'unfriend';
         }
 
         try {
@@ -205,139 +200,184 @@ const ProfilePage = () => {
                 `${API_BASE_URL}/api/friendship/${targetId}/toggle-friendship`,
                 {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...getAuthHeaders(),
-                    },
-                    body: JSON.stringify({ action: actionToSend }),
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                    body: JSON.stringify({ action: actionToSend })
                 }
             );
 
-            const responseData = await response.json();
-            alert(responseData.message);
+            const data = await response.json();
+            alert(data.message);
 
-            if (response.ok || response.status === 409) {
-                fetchProfileDetails();
-                fetchPendingRequests();
-                fetchOutgoingRequests();
-            }
-
-        } catch (error) {
-            alert("Network error during friendship action.");
+            fetchProfileDetails();
+            fetchPendingRequests();
+            fetchOutgoingRequests();
+            fetchFollowerCounts();
+        } catch {
+            alert("Network error.");
         }
     };
 
     const fetchFollowerCounts = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/user/${profileId}/follower-counts`, {
-                headers: getAuthHeaders(),
-            });
-            if (response.ok) {
-                const data = await response.json();
+            const res = await fetch(
+                `${API_BASE_URL}/api/user/${profileId}/follower-counts`,
+                { headers: getAuthHeaders() }
+            );
+
+            if (res.ok) {
+                const data = await res.json();
                 setFollowerCount(data.followers || 0);
                 setFollowingCount(data.following || 0);
-            } else {
-                setFollowerCount(0);
-                setFollowingCount(0);
             }
-        } catch (error) {
-            console.error("Error fetching follower counts:", error);
-            setFollowerCount(0);
-            setFollowingCount(0);
-        }
+        } catch { }
     };
 
     const handleUpdateSettings = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/user/${userId}/settings`, {
+            const res = await fetch(`${API_BASE_URL}/api/user/${userId}/settings`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeaders(),
-                },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ profileType }),
             });
 
-            const data = await response.json();
+            const data = await res.json();
 
-            if (response.ok) {
+            if (res.ok) {
                 alert(data.message);
                 setShowSettings(false);
                 fetchProfileDetails();
             } else {
-                alert(data.message || "Failed to update settings.");
+                alert(data.message);
             }
-        } catch (error) {
-            console.error("Error updating settings:", error);
-            alert("Network error during settings update.");
+        } catch {
+            alert("Network error.");
         }
     };
 
     const handleLike = async (postId) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/posts/post/${postId}/like`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeaders()
+            const response = await fetch(
+                `${API_BASE_URL}/api/posts/post/${postId}/like`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...getAuthHeaders() }
                 }
-            });
+            );
 
-            if (response.ok) {
-                fetchUserPosts();
-            } else {
-                const errorData = await response.json();
-                alert(errorData.message || "Failed to like post.");
-            }
-        } catch (error) {
-            console.error("Network error during like action:", error);
-            alert("Network error during like action.");
+            if (response.ok) fetchUserPosts();
+        } catch { }
+    };
+
+    const openPostModal = (postId) => setSelectedPostId(postId);
+    const closePostModal = () => setSelectedPostId(null);
+
+    if (loading || !profileData)
+        return <div className="page-container">Loading Profile...</div>;
+
+    if (!profileData?.UserID)
+        return <div className="page-container">User Not Found</div>;
+
+    const { yourStatus, theirStatus } = friendshipStatus;
+
+
+
+    const renderFollowButton = () => {
+        if (isCurrentUserProfile) return null;
+
+        const wrapper = {
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "10px",
+            width: "100%"
+        };
+
+        // Unfollow
+        if (yourStatus === STATUS.ACCEPTED && (theirStatus === STATUS.ACCEPTED || theirStatus === STATUS.NOT_FRIENDS)) {
+            return (
+                <div style={wrapper}>
+                    <button className="btn-unfriend" onClick={() => handleToggleFollow('unfriend')}>
+                        {profileData?.ProfileType === 'Public' ? 'Unfollow' : 'Unfriend'}
+                    </button>
+                </div>
+            );
         }
-    };
 
-    const openPostModal = (postId) => {
-        setSelectedPostId(postId);
-    };
-
-    const closePostModal = () => {
-        setSelectedPostId(null);
-    };
-
-    const getButtonText = () => {
-        if (profileData?.ProfileType === 'Public') {
-            switch (friendshipStatus) {
-                case STATUS.ACCEPTED:
-                    return 'Following';
-                case STATUS.PENDING_SENT:
-                    return 'Follow Request Sent';
-                case STATUS.NOT_FRIENDS:
-                    return 'Follow';
-                default:
-                    return 'Follow';
-            }
-        } else {
-            switch (friendshipStatus) {
-                case STATUS.ACCEPTED:
-                    return 'Unfriend';
-                case STATUS.PENDING_RECEIVED:
-                    return 'Accept Request';
-                case STATUS.PENDING_SENT:
-                    return 'Cancel Request';
-                case STATUS.NOT_FRIENDS:
-                    return 'Add Friend';
-                default:
-                    return 'Action';
-            }
+        // Unfollow + Accept/Decline
+        if (yourStatus === STATUS.ACCEPTED && theirStatus === STATUS.PENDING_RECEIVED) {
+            return (
+                <div style={wrapper}>
+                    <button className="btn-unfriend" onClick={() => handleToggleFollow('unfriend')}>
+                        {profileData?.ProfileType === 'Public' ? 'Unfollow' : 'Unfriend'}
+                    </button>
+                    <button className="btn-accept" onClick={() => handleToggleFollow('accept')}>
+                        Accept
+                    </button>
+                    <button className="btn-unfriend" onClick={() => handleToggleFollow('decline')}>
+                        Decline
+                    </button>
+                </div>
+            );
         }
+
+        // Cancel Request
+        if (yourStatus === STATUS.PENDING_SENT && (theirStatus === STATUS.ACCEPTED || theirStatus === STATUS.NOT_FRIENDS)) {
+            return (
+                <div style={wrapper}>
+                    <button className="btn-friend" onClick={() => handleToggleFollow('cancel')}>
+                        Cancel Request
+                    </button>
+                </div>
+            );
+        }
+
+        // Cancel + Accept/Decline
+        if (yourStatus === STATUS.PENDING_SENT && theirStatus === STATUS.PENDING_RECEIVED) {
+            return (
+                <div style={wrapper}>
+                    <button className="btn-friend" onClick={() => handleToggleFollow('cancel')}>
+                        Cancel Request
+                    </button>
+                    <button className="btn-accept" onClick={() => handleToggleFollow('accept')}>
+                        Accept
+                    </button>
+                    <button className="btn-unfriend" onClick={() => handleToggleFollow('decline')}>
+                        Decline
+                    </button>
+                </div>
+            );
+        }
+
+        // Follow
+        if (yourStatus === STATUS.NOT_FRIENDS && (theirStatus === STATUS.ACCEPTED || theirStatus === STATUS.NOT_FRIENDS)) {
+            return (
+                <div style={wrapper}>
+                    <button className="btn-friend" onClick={() => handleToggleFollow('send')}>
+                        {profileData?.ProfileType === 'Public' ? 'Follow' : 'Send Request'}
+                    </button>
+                </div>
+            );
+        }
+
+        // Follow + Accept/Decline
+        if (yourStatus === STATUS.NOT_FRIENDS && theirStatus === STATUS.PENDING_RECEIVED) {
+            return (
+                <div style={wrapper}>
+                    <button className="btn-friend" onClick={() => handleToggleFollow('send')}>
+                        {profileData?.ProfileType === 'Public' ? 'Follow' : 'Send Request'}
+                    </button>
+                    <button className="btn-accept" onClick={() => handleToggleFollow('accept')}>
+                        Accept
+                    </button>
+                    <button className="btn-unfriend" onClick={() => handleToggleFollow('decline')}>
+                        Decline
+                    </button>
+                </div>
+            );
+        }
+
+        return null;
     };
-
-    if (loading || !profileData) {
-        return <div className="page-container"><p className="loading">Loading Profile...</p></div>;
-    }
-
-    if (!profileData.UserID) {
-        return <div className="page-container">User Not Found or Error Loading Profile.</div>;
-    }
 
     if (!canViewProfile && !isCurrentUserProfile) {
         return (
@@ -370,17 +410,11 @@ const ProfilePage = () => {
                             <strong>{followingCount}</strong> Following
                         </span>
                     </div>
-                    <button
-                        className="btn-friend"
-                        onClick={() => handleToggleFollow(null, null)}
-                    >
-                        {getButtonText()}
-                    </button>
+                    {renderFollowButton()}
                 </div>
             </div>
         );
     }
-
     return (
         <div className="page-container profile-layout">
             <div className="profile-header">
@@ -388,15 +422,14 @@ const ProfilePage = () => {
                     <h1>
                         {profileData.Name} {isCurrentUserProfile && '(You)'}
                     </h1>
-                    <p className="subtext">@{profileData.Username} | User ID: <strong>{profileId}</strong></p>
-                    <p className="subtext">
-                        Profile Type: <strong>{profileData.ProfileType}</strong>
-                    </p>
-                    <div className="follower-stats">
+                    <p>@{profileData.Username} | User ID: <strong>{profileId}</strong></p>
+                    <p>Profile: <strong>{profileData.ProfileType}</strong></p>
+
+                    <div className="follower-stats" style={{ justifyContent: 'center', margin: '1rem' }}>
                         <span
                             className="stat-item clickable-stat"
                             onClick={() => setModalConfig({
-                                title: `👥 ${profileData.Name}'s Followers`,
+                                title: `${profileData.Name}'s Followers`,
                                 endpoint: `${API_BASE_URL}/api/user/${profileId}/followers`,
                                 showFollowBack: isCurrentUserProfile
                             })}
@@ -407,7 +440,7 @@ const ProfilePage = () => {
                         <span
                             className="stat-item clickable-stat"
                             onClick={() => setModalConfig({
-                                title: `👤 ${profileData.Name}'s Following`,
+                                title: `${profileData.Name}'s Following`,
                                 endpoint: `${API_BASE_URL}/api/user/${profileId}/following`,
                                 showUnfollow: isCurrentUserProfile
                             })}
@@ -417,20 +450,11 @@ const ProfilePage = () => {
                     </div>
                 </div>
 
-                {isCurrentUserProfile ? (
-                    <button
-                        className="btn-settings"
-                        onClick={() => setShowSettings(!showSettings)}
-                    >
+                {!isCurrentUserProfile && renderFollowButton()}
+
+                {isCurrentUserProfile && (
+                    <button className="btn-settings" onClick={() => setShowSettings(!showSettings)}>
                         ⚙️ Settings
-                    </button>
-                ) : (
-                    <button
-                        className={`btn-${friendshipStatus === STATUS.ACCEPTED ? 'unfriend' :
-                            friendshipStatus === STATUS.PENDING_RECEIVED ? 'accept' : 'friend'}`}
-                        onClick={() => handleToggleFollow(null, null)}
-                    >
-                        {getButtonText()}
                     </button>
                 )}
             </div>
@@ -507,7 +531,11 @@ const ProfilePage = () => {
                         {outgoingRequests.map(request => (
                             <li key={request.ReceiverID}>
                                 <span style={{ fontSize: '1.1em' }}>
-                                    <strong>{request.ReceiverName}</strong> (@{request.ReceiverUsername})
+                                    <Link
+                                        to={`/profile/${request.ReceiverID}`}
+                                        style={{ color: '#667eea', textDecoration: 'none', fontWeight: 'bold' }}
+                                    >
+                                        {request.ReceiverName}</Link> (@{request.ReceiverUsername})
                                     <small style={{ marginLeft: '10px', color: '#888' }}>
                                         sent on {new Date(request.SinceDate).toLocaleDateString()}
                                     </small>
@@ -526,28 +554,19 @@ const ProfilePage = () => {
                 </div>
             )}
 
-            {isCurrentUserProfile && pendingRequests.length === 0 && outgoingRequests.length === 0 && (
-                <div className="pending-requests-section">
-                    <h2>Friend Requests</h2>
-                    <p>No pending requests.</p>
-                </div>
-            )}
-
             <hr />
 
             <h3>{profileData.Name}'s Posts ({userPosts.length})</h3>
 
-            <div className="posts-grid" style={{ marginTop: '1.5rem' }}>
-                {userPosts.length === 0 && (
-                    <p className="empty-state">No posts yet.</p>
-                )}
+            <div className="posts-grid">
+                {userPosts.length === 0 && <p>No posts yet.</p>}
                 {userPosts.map(post => (
                     <PostCard
                         key={post.PostID}
                         post={post}
                         onLike={handleLike}
-                        onCommentClick={openPostModal}
-                        onPostClick={openPostModal}
+                        onCommentClick={() => openPostModal(post.PostID)}
+                        onPostClick={() => openPostModal(post.PostID)}
                     />
                 ))}
             </div>

@@ -131,7 +131,9 @@ router.put("/:userId/settings", async (req, res) => {
   const { profileType } = req.body;
 
   if (parseInt(userId) !== currentUserId) {
-    return res.status(403).json({ message: "Unauthorized to update this profile." });
+    return res
+      .status(403)
+      .json({ message: "Unauthorized to update this profile." });
   }
 
   if (!["Public", "Private"].includes(profileType)) {
@@ -157,7 +159,9 @@ router.get("/:userId/groups", async (req, res) => {
   const currentUserId = req.currentUserId;
 
   if (parseInt(userId) !== currentUserId) {
-    return res.status(403).json({ message: "Unauthorized to view this user's groups." });
+    return res
+      .status(403)
+      .json({ message: "Unauthorized to view this user's groups." });
   }
 
   try {
@@ -174,7 +178,7 @@ router.get("/:userId/groups", async (req, res) => {
        JOIN GroupTable G ON GM.GroupID = G.GroupID
        WHERE GM.UserID = ?
        ORDER BY GM.JoinDate DESC`,
-      [userId]
+      [userId],
     );
     await connection.end();
     res.json(rows);
@@ -190,7 +194,7 @@ router.get("/:userId/followers", async (req, res) => {
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-    
+
     // Get followers (people who follow this user)
     const [rows] = await connection.execute(
       `SELECT 
@@ -210,9 +214,9 @@ router.get("/:userId/followers", async (req, res) => {
        )
        WHERE F.UserID2 = ? AND F.Status = 'Accepted'
        ORDER BY F.SinceDate DESC`,
-      [currentUserId, userId]
+      [currentUserId, userId],
     );
-    
+
     await connection.end();
     res.json(rows);
   } catch (error) {
@@ -227,7 +231,7 @@ router.get("/:userId/following", async (req, res) => {
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-    
+
     // Get following (people this user follows)
     const [rows] = await connection.execute(
       `SELECT 
@@ -241,9 +245,9 @@ router.get("/:userId/following", async (req, res) => {
        JOIN User U ON F.UserID2 = U.UserID
        WHERE F.UserID1 = ? AND F.Status = 'Accepted'
        ORDER BY F.SinceDate DESC`,
-      [userId]
+      [userId],
     );
-    
+
     await connection.end();
     res.json(rows);
   } catch (error) {
