@@ -61,7 +61,7 @@ const UserListModal = ({
 
     const handleFollowBack = async (userId, userName) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/user/${userId}/toggle-friendship`, {
+            const response = await fetch(`${API_BASE_URL}/api/friendship/${userId}/toggle-friendship`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ const UserListModal = ({
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/user/${userId}/toggle-friendship`, {
+            const response = await fetch(`${API_BASE_URL}/api/friendship/${userId}/toggle-friendship`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

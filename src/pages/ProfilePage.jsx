@@ -154,7 +154,7 @@ const ProfilePage = () => {
             setFriendshipStatus(STATUS.SELF);
         } else {
             try {
-                const followResponse = await fetch(`${API_BASE_URL}/api/user/${profileId}/follow-status`, {
+                const followResponse = await fetch(`${API_BASE_URL}/api/friendship/${profileId}/follow-status`, {
                     headers: getAuthHeaders(),
                 });
 
@@ -202,7 +202,7 @@ const ProfilePage = () => {
 
         try {
             const response = await fetch(
-                `${API_BASE_URL}/api/user/${targetId}/toggle-friendship`,
+                `${API_BASE_URL}/api/friendship/${targetId}/toggle-friendship`,
                 {
                     method: 'POST',
                     headers: {

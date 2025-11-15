@@ -17,11 +17,9 @@ app.use(express.json());
 app.use("/api", authRoutes);
 app.use(authenticate);
 app.use("/api/user", userRoutes);
-app.use("/api/user", friendshipRoutes);
 app.use("/api/friendship", friendshipRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/groups", groupRoutes);
-app.use("/api/group", groupRoutes);
 app.use("/api/search", searchRoutes);
 
 app.listen(port, () => {

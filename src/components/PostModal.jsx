@@ -100,7 +100,7 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/comment/${commentId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/comment/${commentId}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders(),
             });
