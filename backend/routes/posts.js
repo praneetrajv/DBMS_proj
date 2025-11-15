@@ -67,7 +67,9 @@ router.post("/post/:postId/like", async (req, res) => {
           [likerId, postId],
         );
         await connection.end();
-        return res.status(200).json({ message: "Post unliked! Trigger fired." });
+        return res
+          .status(200)
+          .json({ message: "Post unliked! Trigger fired." });
       } catch (deleteError) {
         console.error("Error processing unlike:", deleteError);
         return res.status(500).json({ message: "Error processing unlike" });
@@ -169,17 +171,20 @@ router.post("/", async (req, res) => {
 
 router.get("/:postId", async (req, res) => {
   const { postId } = req.params;
+  const currentUserId = req.currentUserId;
+
   try {
     const connection = await mysql.createConnection(dbConfig);
     const [rows] = await connection.execute(
       `SELECT 
         P.PostID, P.UserID, P.Content, P.Timestamp, P.LikeCount, P.CommentCount,
-        P.GroupID, G.Name AS GroupName, U.Name AS Author
+        P.GroupID, G.Name AS GroupName, U.Name AS Author,
+        CASE WHEN P.UserID = ? THEN 1 ELSE 0 END AS IsOwner
        FROM Post P
        JOIN User U ON P.UserID = U.UserID
        LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
        WHERE P.PostID = ?`,
-      [postId],
+      [currentUserId, postId],
     );
     await connection.end();
 
@@ -190,6 +195,49 @@ router.get("/:postId", async (req, res) => {
   } catch (error) {
     console.error("Error fetching post details:", error);
     res.status(500).json({ message: "Failed to retrieve post details." });
+  }
+});
+
+router.delete("/:postId", async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.currentUserId;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    const [check] = await connection.execute(
+      "SELECT UserID FROM Post WHERE PostID = ?",
+      [postId],
+    );
+
+    if (check.length === 0) {
+      await connection.end();
+      return res.status(404).json({ message: "Post not found." });
+    }
+
+    if (check[0].UserID !== userId) {
+      await connection.end();
+      return res.status(403).json({
+        message: "You do not have permission to delete this post.",
+      });
+    }
+
+    const [result] = await connection.execute(
+      "DELETE FROM Post WHERE PostID = ?",
+      [postId],
+    );
+    await connection.end();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Post not found." });
+    }
+
+    res.status(200).json({
+      message: "Post deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Error deleting post:", error);
+    res.status(500).json({ message: "Failed to delete post." });
   }
 });
 

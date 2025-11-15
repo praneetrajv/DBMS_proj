@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 
 const API_BASE_URL = 'http://localhost:3001';
 
 const PostModal = ({ postId, onClose, onUpdate }) => {
-    const { getAuthHeaders } = useAuth();
+    const { userId: currentUserId, getAuthHeaders } = useAuth();
+    const navigate = useNavigate();
     const [post, setPost] = useState(null);
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
@@ -118,6 +119,32 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
         }
     };
 
+    const handleDeletePost = async () => {
+        if (!window.confirm("Are you sure you want to delete this post? This action cannot be undone.")) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders(),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                onClose();
+                if (onUpdate) onUpdate();
+            } else {
+                alert(data.message || "Failed to delete post.");
+            }
+        } catch (error) {
+            console.error("Error deleting post:", error);
+            alert("Network error during delete action.");
+        }
+    };
+
     if (loading || !post) {
         return (
             <div className="modal-overlay" onClick={onClose}>
@@ -134,12 +161,25 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
                 <button className="modal-close" onClick={onClose}>×</button>
 
                 <div className="post-modal-header">
-                    <h2>
-                        <Link to={`/profile/${post.UserID}`} onClick={onClose}>
-                            {post.Author}
-                        </Link>
-                    </h2>
-                    <p className="timestamp">{new Date(post.Timestamp).toLocaleString()}</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                            <h2>
+                                <Link to={`/profile/${post.UserID}`} onClick={onClose}>
+                                    {post.Author}
+                                </Link>
+                            </h2>
+                            <p className="timestamp">{new Date(post.Timestamp).toLocaleString()}</p>
+                        </div>
+                        {post.IsOwner === 1 && (
+                            <button
+                                onClick={handleDeletePost}
+                                className="btn-delete-post"
+                                style={{ marginLeft: '1rem' }}
+                            >
+                                🗑️ Delete Post
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="post-modal-body">
@@ -148,7 +188,7 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
                     {post.GroupName && (
                         <p className="group">
                             Posted in{' '}
-                            <Link to={`/group/${post.GroupID}`} onClick={onClose}>
+                            <Link to={`/groups/${post.GroupID}`} onClick={onClose}>
                                 {post.GroupName}
                             </Link>
                         </p>

@@ -23,7 +23,9 @@ router.post("/create", async (req, res) => {
   const { name, description } = req.body;
 
   if (!name || !description) {
-    return res.status(400).json({ message: "Group name and description are required." });
+    return res
+      .status(400)
+      .json({ message: "Group name and description are required." });
   }
 
   try {
@@ -172,10 +174,14 @@ router.post("/:groupId/join", async (req, res) => {
       [groupId, userId],
     );
     await connection.end();
-    res.status(200).json({ message: "Successfully joined group. MemberCount incremented." });
+    res
+      .status(200)
+      .json({ message: "Successfully joined group. MemberCount incremented." });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ message: "You are already a member of this group." });
+      return res
+        .status(409)
+        .json({ message: "You are already a member of this group." });
     }
     console.error("Error joining group:", error);
     res.status(500).json({ message: "Failed to join group." });
@@ -188,6 +194,29 @@ router.delete("/:groupId/leave", async (req, res) => {
 
   try {
     const connection = await mysql.createConnection(dbConfig);
+
+    // Check if user is an admin
+    const [roleCheck] = await connection.execute(
+      "SELECT Role FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
+      [groupId, userId],
+    );
+
+    if (roleCheck.length === 0) {
+      await connection.end();
+      return res
+        .status(404)
+        .json({ message: "You are not currently a member of this group." });
+    }
+
+    // If user is admin, they cannot leave - must delete group instead
+    if (roleCheck[0].Role === "Admin") {
+      await connection.end();
+      return res.status(403).json({
+        message: "Admins cannot leave groups. Use delete group instead.",
+        isAdmin: true,
+      });
+    }
+
     const [result] = await connection.execute(
       "DELETE FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
       [groupId, userId],
@@ -195,13 +224,56 @@ router.delete("/:groupId/leave", async (req, res) => {
     await connection.end();
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "You are not currently a member of this group." });
+      return res
+        .status(404)
+        .json({ message: "You are not currently a member of this group." });
     }
 
-    res.status(200).json({ message: "Successfully left group. MemberCount decremented." });
+    res
+      .status(200)
+      .json({ message: "Successfully left group. MemberCount decremented." });
   } catch (error) {
     console.error("Error leaving group:", error);
     res.status(500).json({ message: "Failed to leave group." });
+  }
+});
+
+// NEW: Delete group endpoint (admin only)
+router.delete("/:groupId", async (req, res) => {
+  const { groupId } = req.params;
+  const userId = req.currentUserId;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    // Check if user is an admin of this group
+    const [adminCheck] = await connection.execute(
+      "SELECT Role FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
+      [groupId, userId],
+    );
+
+    if (adminCheck.length === 0 || adminCheck[0].Role !== "Admin") {
+      await connection.end();
+      return res
+        .status(403)
+        .json({ message: "Only admins can delete groups." });
+    }
+
+    // Delete the group (cascade will handle memberships and posts)
+    const [result] = await connection.execute(
+      "DELETE FROM GroupTable WHERE GroupID = ?",
+      [groupId],
+    );
+    await connection.end();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Group not found." });
+    }
+
+    res.status(200).json({ message: "Group deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting group:", error);
+    res.status(500).json({ message: "Failed to delete group." });
   }
 });
 
@@ -230,7 +302,9 @@ router.delete("/:groupId/kick/:userId", async (req, res) => {
 
     if (targetCheck.length === 0) {
       await connection.end();
-      return res.status(404).json({ message: "User is not a member of this group." });
+      return res
+        .status(404)
+        .json({ message: "User is not a member of this group." });
     }
 
     if (targetCheck[0].Role === "Admin") {
@@ -240,7 +314,9 @@ router.delete("/:groupId/kick/:userId", async (req, res) => {
 
     if (adminId === kickUserId) {
       await connection.end();
-      return res.status(400).json({ message: "Cannot kick yourself. Use leave group instead." });
+      return res
+        .status(400)
+        .json({ message: "Cannot kick yourself. Use leave group instead." });
     }
 
     const [result] = await connection.execute(

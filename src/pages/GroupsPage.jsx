@@ -49,7 +49,7 @@ const GroupsPage = () => {
 
     const handleJoinGroup = async (groupId) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/group/${groupId}/join`, {
+            const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/join`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
             });
@@ -72,7 +72,7 @@ const GroupsPage = () => {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/group/${groupId}/leave`, {
+            const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/leave`, {
                 method: 'DELETE',
                 headers: getAuthHeaders(),
             });
@@ -140,7 +140,7 @@ const GroupsPage = () => {
                     <h1>👥 Groups</h1>
                     <p className="subtext">Discover and join communities</p>
                 </div>
-                <button 
+                <button
                     className="btn-create-group"
                     onClick={() => setShowCreateForm(!showCreateForm)}
                 >
@@ -183,8 +183,8 @@ const GroupsPage = () => {
                             <button type="submit" className="btn-create">
                                 Create Group
                             </button>
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 className="btn-cancel-form"
                                 onClick={() => {
                                     setShowCreateForm(false);

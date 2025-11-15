@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import UserListModal from '../components/UserListModal';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import PostCard from '../components/PostCard';
 import PostModal from '../components/PostModal';
@@ -10,6 +10,7 @@ const API_BASE_URL = 'http://localhost:3001';
 const GroupDetailPage = () => {
     const { groupId } = useParams();
     const { userId, getAuthHeaders } = useAuth();
+    const navigate = useNavigate();
     const [groupData, setGroupData] = useState(null);
     const [posts, setPosts] = useState([]);
     const [membershipStatus, setMembershipStatus] = useState({ isMember: false, role: null });
@@ -22,7 +23,7 @@ const GroupDetailPage = () => {
         setLoading(true);
         try {
             // Fetch group details
-            const groupResponse = await fetch(`${API_BASE_URL}/api/group/${groupId}`, {
+            const groupResponse = await fetch(`${API_BASE_URL}/api/groups/${groupId}`, {
                 headers: getAuthHeaders(),
             });
             if (groupResponse.ok) {
@@ -31,7 +32,7 @@ const GroupDetailPage = () => {
             }
 
             // Check membership status
-            const membershipResponse = await fetch(`${API_BASE_URL}/api/group/${groupId}/membership-status`, {
+            const membershipResponse = await fetch(`${API_BASE_URL}/api/groups/${groupId}/membership-status`, {
                 headers: getAuthHeaders(),
             });
             if (membershipResponse.ok) {
@@ -40,7 +41,7 @@ const GroupDetailPage = () => {
             }
 
             // Fetch group posts
-            const postsResponse = await fetch(`${API_BASE_URL}/api/group/${groupId}/posts`, {
+            const postsResponse = await fetch(`${API_BASE_URL}/api/groups/${groupId}/posts`, {
                 headers: getAuthHeaders(),
             });
             if (postsResponse.ok) {
@@ -62,7 +63,7 @@ const GroupDetailPage = () => {
 
     const handleJoinGroup = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/group/${groupId}/join`, {
+            const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/join`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
             });
@@ -85,12 +86,24 @@ const GroupDetailPage = () => {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/group/${groupId}/leave`, {
+            const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/leave`, {
                 method: 'DELETE',
                 headers: getAuthHeaders(),
             });
 
             const data = await response.json();
+
+            if (response.status === 403 && data.isAdmin) {
+                const shouldDelete = window.confirm(
+                    "As an admin, you cannot leave this group. Leaving will DELETE the entire group and all its posts. Do you want to proceed?"
+                );
+
+                if (shouldDelete) {
+                    handleDeleteGroup();
+                }
+                return;
+            }
+
             alert(data.message);
 
             if (response.ok) {
@@ -99,6 +112,31 @@ const GroupDetailPage = () => {
         } catch (error) {
             console.error("Error leaving group:", error);
             alert("Network error during leave action.");
+        }
+    };
+
+    const handleDeleteGroup = async () => {
+        try {
+            const shouldDelete = window.confirm(
+                "Deleteing the group will delete all the posts. Do you want to proceed?"
+            );
+            if (!shouldDelete) {
+                return;
+            }
+            const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders(),
+            });
+
+            const data = await response.json();
+            alert(data.message);
+
+            if (response.ok) {
+                navigate('/groups');
+            }
+        } catch (error) {
+            console.error("Error deleting group:", error);
+            alert("Network error during delete action.");
         }
     };
 
@@ -180,7 +218,7 @@ const GroupDetailPage = () => {
                         className="group-stats clickable-stats"
                         onClick={() => setModalConfig({
                             title: `👥 Members of ${groupData.Name}`,
-                            endpoint: `${API_BASE_URL}/api/group/${groupId}/members`,
+                            endpoint: `${API_BASE_URL}/api/groups/${groupId}/members`,
                             showKick: true
                         })}
                         style={{ cursor: 'pointer' }}
@@ -190,13 +228,17 @@ const GroupDetailPage = () => {
                 </div>
 
                 {membershipStatus.isMember ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                         {membershipStatus.role === 'Admin' && (
                             <span className="role-badge admin">Admin</span>
                         )}
-                        <button className="btn-leave" onClick={handleLeaveGroup}>
-                            Leave Group
-                        </button>
+                        {membershipStatus.role === 'Admin' ?
+                            <button className="btn-leave" onClick={handleDeleteGroup}>
+                                Delete Group
+                            </button> :
+                            <button className="btn-leave" onClick={handleLeaveGroup}>
+                                Leave Group
+                            </button>}
                     </div>
                 ) : (
                     <button className="btn-join" onClick={handleJoinGroup}>
@@ -261,14 +303,14 @@ const GroupDetailPage = () => {
             )}
 
             {modalConfig && (
-  <UserListModal
-    title={modalConfig.title}
-    endpoint={modalConfig.endpoint}
-    showKick={modalConfig.showKick}
-    onClose={() => setModalConfig(null)}
-    onActionComplete={fetchGroupDetails}
-  />
-)}
+                <UserListModal
+                    title={modalConfig.title}
+                    endpoint={modalConfig.endpoint}
+                    showKick={modalConfig.showKick}
+                    onClose={() => setModalConfig(null)}
+                    onActionComplete={fetchGroupDetails}
+                />
+            )}
         </div>
     );
 };

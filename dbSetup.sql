@@ -151,7 +151,6 @@ BEGIN
     CASE
       WHEN F.UserID2 IS NOT NULL THEN 1  -- Following
       WHEN P.GroupID IS NOT NULL AND GM.UserID IS NOT NULL THEN 2  -- Group member
-      WHEN U.ProfileType = 'Public' THEN 3  -- Public profile
       ELSE 4
     END AS Priority
   FROM Post P

@@ -4,14 +4,14 @@ import { useAuth } from '../AuthContext';
 
 const API_BASE_URL = 'http://localhost:3001';
 
-const UserListModal = ({ 
-    title, 
-    endpoint, 
-    onClose, 
+const UserListModal = ({
+    title,
+    endpoint,
+    onClose,
     showFollowBack = false,
     showUnfollow = false,
     showKick = false,
-    onActionComplete 
+    onActionComplete
 }) => {
     const { userId: currentUserId, getAuthHeaders } = useAuth();
     const [users, setUsers] = useState([]);
@@ -27,7 +27,7 @@ const UserListModal = ({
 
             if (response.ok) {
                 const data = await response.json();
-                
+
                 // Handle different response formats
                 if (data.members) {
                     // Group members format
@@ -85,7 +85,7 @@ const UserListModal = ({
 
     const handleUnfollow = async (userId, userName, profileType) => {
         const isPublic = profileType === 'Public';
-        const confirmMessage = isPublic 
+        const confirmMessage = isPublic
             ? `Are you sure you want to unfollow ${userName}?`
             : `Are you sure you want to unfriend ${userName}?`;
 
@@ -122,7 +122,7 @@ const UserListModal = ({
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/group/${groupId}/kick/${userId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/kick/${userId}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders(),
             });
