@@ -79,7 +79,9 @@ const NewsFeed = () => {
     };
 
     useEffect(() => {
-        fetchFeed();
+        if (userId) {
+            fetchFeed();
+        }
     }, [userId]);
 
     const handleLike = async (postId) => {
@@ -123,7 +125,7 @@ const NewsFeed = () => {
                 Viewing feed as User <strong>{userId}</strong>
             </p>
             {loading && <p className="loading">Loading Feed...</p>}
-            
+
             <div className="create-post-section">
                 <h3>✍️ Create a Post</h3>
                 <form onSubmit={handleCreatePost}>

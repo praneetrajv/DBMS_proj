@@ -14,8 +14,8 @@ app.use(express.json());
 
 const dbConfig = {
   host: "localhost",
-  user: "root",
-  password: "praneet",
+  user: "harshith",
+  password: "root",
   database: "social_network",
 };
 
@@ -29,9 +29,11 @@ const authenticate = (req, res, next) => {
       return next();
     }
   }
-  return res
-    .status(401)
-    .json({ message: "Authentication required. Please log in." });
+  // Clear invalid/expired token
+  return res.status(401).json({
+    message: "Authentication required. Please log in.",
+    expired: true,
+  });
 };
 
 // =================================================================
@@ -44,7 +46,7 @@ app.post("/api/register", async (req, res) => {
     const hash = await bcrypt.hash(password, saltRounds);
     const connection = await mysql.createConnection(dbConfig);
     const [result] = await connection.execute(
-      "INSERT INTO User (Name, Username, Email, PasswordHash, DOB, Gender) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO User (Name, Username, Email, PasswordHash, DOB, Gender, ProfileType) VALUES (?, ?, ?, ?, ?, ?, 'Public')",
       [name, username, email, hash, dob, gender],
     );
     await connection.end();
@@ -144,32 +146,6 @@ app.get("/api/feed/:userId", async (req, res) => {
   }
 });
 
-app.get("/api/users/search", async (req, res) => {
-  const searchTerm = req.query.q;
-
-  if (!searchTerm || searchTerm.length < 2) {
-    return res.json([]);
-  }
-
-  const searchPattern = `%${searchTerm}%`;
-
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      `SELECT UserID, Name, Username 
-       FROM User 
-       WHERE Name LIKE ? OR Username LIKE ? 
-       LIMIT 10`,
-      [searchPattern, searchPattern],
-    );
-    await connection.end();
-    res.json(rows);
-  } catch (error) {
-    console.error("Error executing user search:", error);
-    res.status(500).json({ message: "Failed to perform user search." });
-  }
-});
-
 // =================================================================
 // 👤 PROTECTED PROFILE AND ACTION ROUTES
 // =================================================================
@@ -179,7 +155,7 @@ app.get("/api/user/:userId", async (req, res) => {
   try {
     const connection = await mysql.createConnection(dbConfig);
     const [rows] = await connection.execute(
-      "SELECT UserID, Name, Username, Email, Gender FROM User WHERE UserID = ?",
+      "SELECT UserID, Name, Username, Email, Gender, ProfileType FROM User WHERE UserID = ?",
       [userId],
     );
     await connection.end();
@@ -257,6 +233,18 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
   try {
     const connection = await mysql.createConnection(dbConfig);
 
+    const [profileRows] = await connection.execute(
+      "SELECT ProfileType FROM User WHERE UserID = ?",
+      [targetId],
+    );
+
+    if (profileRows.length === 0) {
+      await connection.end();
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const isPublicProfile = profileRows[0].ProfileType === "Public";
+
     const [existing] = await connection.execute(
       `SELECT Status, UserID1 
        FROM Friendship 
@@ -274,11 +262,14 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
     switch (action) {
       case "send":
         if (status === "None") {
+          const relationshipStatus = isPublicProfile ? "Accepted" : "Pending";
           await connection.execute(
-            "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, 'Pending', CURRENT_DATE())",
-            [initiatorId, targetId],
+            "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, ?, CURRENT_DATE())",
+            [initiatorId, targetId, relationshipStatus],
           );
-          actionMessage = "Friend request sent (Pending).";
+          actionMessage = isPublicProfile
+            ? "Now following!"
+            : "Friend request sent (Pending).";
         } else {
           actionMessage = "A relationship already exists.";
           success = false;
@@ -306,9 +297,33 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
             [initiatorId, targetId],
           );
           actionMessage = "Friend request cancelled.";
+        } else if (
+          status === "Accepted" &&
+          isInitiatorTheSender &&
+          isPublicProfile
+        ) {
+          await connection.execute(
+            "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
+            [initiatorId, targetId],
+          );
+          actionMessage = "Unfollowed successfully.";
         } else {
           actionMessage =
             "Cannot cancel: not the sender or request is not pending.";
+          success = false;
+        }
+        break;
+
+      case "decline":
+        if (status === "Pending" && !isInitiatorTheSender) {
+          await connection.execute(
+            "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
+            [senderIdInRow, initiatorId],
+          );
+          actionMessage = "Friend request declined.";
+        } else {
+          actionMessage =
+            "Cannot decline: no pending request received or you sent the request.";
           success = false;
         }
         break;
@@ -319,7 +334,9 @@ app.post("/api/user/:profileId/toggle-friendship", async (req, res) => {
             "DELETE FROM Friendship WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)",
             [initiatorId, targetId, targetId, initiatorId],
           );
-          actionMessage = "Unfriended successfully.";
+          actionMessage = isPublicProfile
+            ? "Unfollowed successfully."
+            : "Unfriended successfully.";
         } else {
           actionMessage = "Cannot perform this deletion action.";
           success = false;
@@ -717,7 +734,6 @@ app.listen(port, () => {
   console.log(`Backend server running at http://localhost:${port}`);
 });
 
-
 /* ------------------------------------------------- */
 // Add these new routes to your backend/server.js file
 
@@ -754,10 +770,12 @@ app.put("/api/user/:userId/settings", async (req, res) => {
 
   // Only allow users to update their own settings
   if (parseInt(userId) !== currentUserId) {
-    return res.status(403).json({ message: "Unauthorized to update this profile." });
+    return res
+      .status(403)
+      .json({ message: "Unauthorized to update this profile." });
   }
 
-  if (!['Public', 'Private'].includes(profileType)) {
+  if (!["Public", "Private"].includes(profileType)) {
     return res.status(400).json({ message: "Invalid profile type." });
   }
 
@@ -781,12 +799,14 @@ app.post("/api/groups/create", async (req, res) => {
   const { name, description } = req.body;
 
   if (!name || !description) {
-    return res.status(400).json({ message: "Group name and description are required." });
+    return res
+      .status(400)
+      .json({ message: "Group name and description are required." });
   }
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-    
+
     // Start transaction
     await connection.beginTransaction();
 
@@ -817,27 +837,6 @@ app.post("/api/groups/create", async (req, res) => {
   }
 });
 
-// Update the user profile endpoint to include ProfileType
-app.get("/api/user/:userId", async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      "SELECT UserID, Name, Username, Email, Gender, ProfileType FROM User WHERE UserID = ?",
-      [userId],
-    );
-    await connection.end();
-
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "User not found." });
-    }
-    res.json(rows[0]);
-  } catch (error) {
-    console.error("Error fetching profile data:", error);
-    res.status(500).json({ message: "Failed to retrieve profile data." });
-  }
-});
-
 // Check if user can view profile (for private profiles)
 app.get("/api/user/:userId/can-view", async (req, res) => {
   const currentUserId = req.currentUserId;
@@ -851,7 +850,7 @@ app.get("/api/user/:userId/can-view", async (req, res) => {
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-    
+
     // Check profile type
     const [userRows] = await connection.execute(
       "SELECT ProfileType FROM User WHERE UserID = ?",
@@ -866,7 +865,7 @@ app.get("/api/user/:userId/can-view", async (req, res) => {
     const profileType = userRows[0].ProfileType;
 
     // Public profiles can be viewed by anyone
-    if (profileType === 'Public') {
+    if (profileType === "Public") {
       await connection.end();
       return res.json({ canView: true, reason: "public_profile" });
     }
@@ -889,5 +888,190 @@ app.get("/api/user/:userId/can-view", async (req, res) => {
   } catch (error) {
     console.error("Error checking view permissions:", error);
     res.status(500).json({ message: "Failed to check permissions." });
+  }
+});
+
+app.get("/api/user/:userId/follower-counts", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    const [followersResult] = await connection.execute(
+      `SELECT COUNT(*) as count FROM Friendship 
+       WHERE UserID2 = ? AND Status = 'Accepted'`,
+      [userId],
+    );
+
+    const [followingResult] = await connection.execute(
+      `SELECT COUNT(*) as count FROM Friendship 
+       WHERE UserID1 = ? AND Status = 'Accepted'`,
+      [userId],
+    );
+
+    await connection.end();
+
+    res.json({
+      followers: followersResult[0].count,
+      following: followingResult[0].count,
+    });
+  } catch (error) {
+    console.error("Error fetching follower counts:", error);
+    res.status(500).json({ message: "Failed to fetch follower counts." });
+  }
+});
+
+app.get("/api/group/:groupId/members", async (req, res) => {
+  const { groupId } = req.params;
+  const currentUserId = req.currentUserId;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    // First check if user is a member of the group
+    const [memberCheck] = await connection.execute(
+      "SELECT Role FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
+      [groupId, currentUserId],
+    );
+
+    if (memberCheck.length === 0) {
+      await connection.end();
+      return res
+        .status(403)
+        .json({ message: "You must be a member to view members." });
+    }
+
+    const userRole = memberCheck[0].Role;
+
+    // Get all members
+    const [rows] = await connection.execute(
+      `SELECT 
+        GM.UserID,
+        U.Name,
+        U.Username,
+        GM.Role,
+        GM.JoinDate
+       FROM GroupMembership GM
+       JOIN User U ON GM.UserID = U.UserID
+       WHERE GM.GroupID = ?
+       ORDER BY 
+         CASE GM.Role 
+           WHEN 'Admin' THEN 1 
+           WHEN 'Member' THEN 2 
+         END,
+         GM.JoinDate ASC`,
+      [groupId],
+    );
+
+    await connection.end();
+    res.json({ members: rows, currentUserRole: userRole });
+  } catch (error) {
+    console.error("Error fetching group members:", error);
+    res.status(500).json({ message: "Failed to retrieve group members." });
+  }
+});
+
+app.delete("/api/group/:groupId/kick/:userId", async (req, res) => {
+  const { groupId, userId } = req.params;
+  const adminId = req.currentUserId;
+  const kickUserId = parseInt(userId);
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    // Check if requester is admin
+    const [adminCheck] = await connection.execute(
+      "SELECT Role FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
+      [groupId, adminId],
+    );
+
+    if (adminCheck.length === 0 || adminCheck[0].Role !== "Admin") {
+      await connection.end();
+      return res.status(403).json({ message: "Only admins can kick members." });
+    }
+
+    // Check if target user is also admin
+    const [targetCheck] = await connection.execute(
+      "SELECT Role FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
+      [groupId, kickUserId],
+    );
+
+    if (targetCheck.length === 0) {
+      await connection.end();
+      return res
+        .status(404)
+        .json({ message: "User is not a member of this group." });
+    }
+
+    if (targetCheck[0].Role === "Admin") {
+      await connection.end();
+      return res.status(403).json({ message: "Cannot kick another admin." });
+    }
+
+    // Cannot kick yourself
+    if (adminId === kickUserId) {
+      await connection.end();
+      return res
+        .status(400)
+        .json({ message: "Cannot kick yourself. Use leave group instead." });
+    }
+
+    // Kick the member
+    const [result] = await connection.execute(
+      "DELETE FROM GroupMembership WHERE GroupID = ? AND UserID = ?",
+      [groupId, kickUserId],
+    );
+
+    await connection.end();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Member not found." });
+    }
+
+    res.status(200).json({ message: "Member kicked successfully." });
+  } catch (error) {
+    console.error("Error kicking member:", error);
+    res.status(500).json({ message: "Failed to kick member." });
+  }
+});
+
+// ADD this endpoint after the existing search routes (around line 180):
+app.get("/api/search", async (req, res) => {
+  const searchTerm = req.query.q;
+  const currentUserId = req.currentUserId;
+
+  if (!searchTerm || searchTerm.length < 2) {
+    return res.json({ users: [], groups: [] });
+  }
+
+  const searchPattern = `%${searchTerm}%`;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    // Search users
+    const [userRows] = await connection.execute(
+      `SELECT UserID, Name, Username 
+       FROM User 
+       WHERE (Name LIKE ? OR Username LIKE ?) AND UserID != ?
+       LIMIT 5`,
+      [searchPattern, searchPattern, currentUserId],
+    );
+
+    // Search groups
+    const [groupRows] = await connection.execute(
+      `SELECT GroupID, Name, Description, MemberCount 
+       FROM GroupTable 
+       WHERE Name LIKE ? OR Description LIKE ? 
+       ORDER BY MemberCount DESC
+       LIMIT 5`,
+      [searchPattern, searchPattern],
+    );
+
+    await connection.end();
+    res.json({ users: userRows, groups: groupRows });
+  } catch (error) {
+    console.error("Error executing unified search:", error);
+    res.status(500).json({ message: "Failed to perform search." });
   }
 });

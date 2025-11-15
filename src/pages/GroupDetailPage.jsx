@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import UserListModal from '../components/UserListModal';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import PostCard from '../components/PostCard';
@@ -15,6 +16,7 @@ const GroupDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [newPostContent, setNewPostContent] = useState('');
     const [selectedPostId, setSelectedPostId] = useState(null);
+    const [modalConfig, setModalConfig] = useState(null);
 
     const fetchGroupDetails = async () => {
         setLoading(true);
@@ -53,7 +55,9 @@ const GroupDetailPage = () => {
     };
 
     useEffect(() => {
-        fetchGroupDetails();
+        if (groupId) {
+            fetchGroupDetails();
+        }
     }, [groupId]);
 
     const handleJoinGroup = async () => {
@@ -172,8 +176,17 @@ const GroupDetailPage = () => {
             <div className="group-detail-header">
                 <div>
                     <h1>{groupData.Name}</h1>
-                    <p className="subtext">{groupData.Description}</p>
-                    <p className="group-stats">👥 {groupData.MemberCount} members</p>
+                    <p
+                        className="group-stats clickable-stats"
+                        onClick={() => setModalConfig({
+                            title: `👥 Members of ${groupData.Name}`,
+                            endpoint: `${API_BASE_URL}/api/group/${groupId}/members`,
+                            showKick: true
+                        })}
+                        style={{ cursor: 'pointer' }}
+                    >
+                        👥 {groupData.MemberCount} members
+                    </p>
                 </div>
 
                 {membershipStatus.isMember ? (
@@ -246,6 +259,16 @@ const GroupDetailPage = () => {
                     onUpdate={fetchGroupDetails}
                 />
             )}
+
+            {modalConfig && (
+  <UserListModal
+    title={modalConfig.title}
+    endpoint={modalConfig.endpoint}
+    showKick={modalConfig.showKick}
+    onClose={() => setModalConfig(null)}
+    onActionComplete={fetchGroupDetails}
+  />
+)}
         </div>
     );
 };

@@ -134,43 +134,50 @@ END$$
 DELIMITER ;
 
 -- Procedure: Get User's News Feed
-DELIMITER //
-CREATE PROCEDURE GetNewsFeed(IN input_user_id INT)
+DELIMITER $$
+DROP PROCEDURE IF EXISTS GetNewsFeed$$
+CREATE PROCEDURE GetNewsFeed(IN inputUserId INT)
 BEGIN
-    SELECT 
-        P.PostID,
-        P.UserID,
-        U.Name AS Author,
-        P.Content,
-        P.Timestamp,
-        P.LikeCount,
-        P.CommentCount,
-        G.Name AS GroupName
-    FROM Post P
-    JOIN User U ON P.UserID = U.UserID
-    LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
-    WHERE 
-        -- User's own posts
-        P.UserID = input_user_id
-        OR
-        -- Posts from public profiles
-        (U.ProfileType = 'Public' AND P.GroupID IS NULL)
-        OR
-        -- Posts from accepted friends (private profiles)
-        (P.UserID IN (
-            SELECT UserID2 FROM Friendship 
-            WHERE UserID1 = input_user_id AND Status = 'Accepted'
-            UNION
-            SELECT UserID1 FROM Friendship 
-            WHERE UserID2 = input_user_id AND Status = 'Accepted'
-        ))
-        OR
-        -- Posts from groups the user is a member of
-        P.GroupID IN (
-            SELECT GroupID FROM GroupMembership WHERE UserID = input_user_id
-        )
-    ORDER BY P.Timestamp DESC;
-END//
+  SELECT DISTINCT
+    P.PostID, 
+    P.UserID, 
+    P.Content, 
+    P.Timestamp, 
+    P.LikeCount, 
+    P.CommentCount,
+    P.GroupID,
+    G.Name AS GroupName,
+    U.Name AS Author,
+    CASE
+      WHEN F.UserID2 IS NOT NULL THEN 1  -- Following
+      WHEN P.GroupID IS NOT NULL AND GM.UserID IS NOT NULL THEN 2  -- Group member
+      WHEN U.ProfileType = 'Public' THEN 3  -- Public profile
+      ELSE 4
+    END AS Priority
+  FROM Post P
+  JOIN User U ON P.UserID = U.UserID
+  LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
+  LEFT JOIN Friendship F ON (
+    F.UserID1 = inputUserId 
+    AND F.UserID2 = P.UserID 
+    AND F.Status = 'Accepted'
+  )
+  LEFT JOIN GroupMembership GM ON (
+    P.GroupID = GM.GroupID 
+    AND GM.UserID = inputUserId
+  )
+  WHERE 
+    P.UserID != inputUserId  -- Don't show own posts
+    AND (
+      -- Show if following the user
+      F.UserID2 IS NOT NULL
+      -- OR if it's a group post and user is member
+      OR (P.GroupID IS NOT NULL AND GM.UserID IS NOT NULL)
+      -- OR if it's from a public profile (not in a group)
+      OR (U.ProfileType = 'Public' AND P.GroupID IS NULL)
+    )
+  ORDER BY Priority ASC, P.Timestamp DESC;
+END$$
 DELIMITER ;
 
 -- Triggers for Like Count

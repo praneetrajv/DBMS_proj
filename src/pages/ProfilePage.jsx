@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import PostCard from '../components/PostCard';
 import PostModal from '../components/PostModal';
+import UserListModal from '../components/UserListModal';
 
 const API_BASE_URL = 'http://localhost:3001';
 
@@ -29,11 +30,14 @@ const ProfilePage = () => {
     const [canViewProfile, setCanViewProfile] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const [profileType, setProfileType] = useState('Public');
+    const [followerCount, setFollowerCount] = useState(0);
+    const [followingCount, setFollowingCount] = useState(0);
+    const [modalConfig, setModalConfig] = useState(null);
 
     const isCurrentUserProfile = userId === profileId;
 
     const interpretStatus = (data) => {
-        if (!data.status) return STATUS.NOT_FRIENDS;
+        if (!data || !data.status) return STATUS.NOT_FRIENDS;
         if (data.status === 'Accepted') return STATUS.ACCEPTED;
         if (data.status === 'Pending') {
             if (data.rowInitiatorId === userId) {
@@ -175,9 +179,10 @@ const ProfilePage = () => {
             fetchProfileDetails();
             fetchPendingRequests();
             fetchOutgoingRequests();
+            fetchFollowerCounts();
         };
         fetchAllDetails();
-    }, [profileId, userId]);
+    }, [profileId, userId, isCurrentUserProfile]);
 
     const handleToggleFollow = async (explicitAction, targetProfileId) => {
         const targetId = targetProfileId || profileId;
@@ -219,6 +224,26 @@ const ProfilePage = () => {
 
         } catch (error) {
             alert("Network error during friendship action.");
+        }
+    };
+
+    const fetchFollowerCounts = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/user/${profileId}/follower-counts`, {
+                headers: getAuthHeaders(),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setFollowerCount(data.followers || 0);
+                setFollowingCount(data.following || 0);
+            } else {
+                setFollowerCount(0);
+                setFollowingCount(0);
+            }
+        } catch (error) {
+            console.error("Error fetching follower counts:", error);
+            setFollowerCount(0);
+            setFollowingCount(0);
         }
     };
 
@@ -318,8 +343,33 @@ const ProfilePage = () => {
         return (
             <div className="page-container">
                 <div className="private-profile-notice">
-                    <h1>🔒 Private Profile</h1>
+                    <div className="private-profile-icon">👤</div>
+                    <h1>{profileData.Name}</h1>
+                    <p className="private-badge">🔒 Private Profile</p>
                     <p>This profile is private. Send a friend request to view their content.</p>
+                    <div className="follower-stats" style={{ justifyContent: 'center', marginTop: '1rem' }}>
+                        <span
+                            className="stat-item clickable-stat"
+                            onClick={() => setModalConfig({
+                                title: `👥 ${profileData.Name}'s Followers`,
+                                endpoint: `${API_BASE_URL}/api/user/${profileId}/followers`,
+                                showFollowBack: false
+                            })}
+                        >
+                            <strong>{followerCount}</strong> Followers
+                        </span>
+                        <span className="stat-divider">•</span>
+                        <span
+                            className="stat-item clickable-stat"
+                            onClick={() => setModalConfig({
+                                title: `👤 ${profileData.Name}'s Following`,
+                                endpoint: `${API_BASE_URL}/api/user/${profileId}/following`,
+                                showUnfollow: false
+                            })}
+                        >
+                            <strong>{followingCount}</strong> Following
+                        </span>
+                    </div>
                     <button
                         className="btn-friend"
                         onClick={() => handleToggleFollow(null, null)}
@@ -340,10 +390,32 @@ const ProfilePage = () => {
                         {profileData.ProfileType === 'Private' && ' 🔒'}
                     </h1>
                     <p className="subtext">@{profileData.Username} | User ID: <strong>{profileId}</strong></p>
-                    <p className="subtext">Email: {profileData.Email} | Gender: {profileData.Gender}</p>
                     <p className="subtext">
                         Profile Type: <strong>{profileData.ProfileType}</strong>
                     </p>
+                    <div className="follower-stats">
+                        <span
+                            className="stat-item clickable-stat"
+                            onClick={() => setModalConfig({
+                                title: `👥 ${profileData.Name}'s Followers`,
+                                endpoint: `${API_BASE_URL}/api/user/${profileId}/followers`,
+                                showFollowBack: isCurrentUserProfile
+                            })}
+                        >
+                            <strong>{followerCount}</strong> Followers
+                        </span>
+                        <span className="stat-divider">•</span>
+                        <span
+                            className="stat-item clickable-stat"
+                            onClick={() => setModalConfig({
+                                title: `👤 ${profileData.Name}'s Following`,
+                                endpoint: `${API_BASE_URL}/api/user/${profileId}/following`,
+                                showUnfollow: isCurrentUserProfile
+                            })}
+                        >
+                            <strong>{followingCount}</strong> Following
+                        </span>
+                    </div>
                 </div>
 
                 {isCurrentUserProfile ? (
@@ -380,7 +452,7 @@ const ProfilePage = () => {
                             </select>
                         </label>
                         <p className="setting-description">
-                            {profileType === 'Public' 
+                            {profileType === 'Public'
                                 ? '✓ Your profile and posts are visible to everyone'
                                 : '🔒 Only friends can view your profile and posts'}
                         </p>
@@ -405,7 +477,12 @@ const ProfilePage = () => {
                         {pendingRequests.map(request => (
                             <li key={request.SenderID}>
                                 <span style={{ fontSize: '1.1em' }}>
-                                    <strong>{request.SenderName}</strong> (@{request.SenderUsername})
+                                    <Link
+                                        to={`/profile/${request.SenderID}`}
+                                        style={{ color: '#667eea', textDecoration: 'none', fontWeight: 'bold' }}
+                                    >
+                                        {request.SenderName}
+                                    </Link> (@{request.SenderUsername})
                                     <small style={{ marginLeft: '10px', color: '#888' }}>
                                         sent on {new Date(request.SinceDate).toLocaleDateString()}
                                     </small>
@@ -414,7 +491,7 @@ const ProfilePage = () => {
                                     <button onClick={() => handleToggleFollow('accept', request.SenderID)}>
                                         Accept
                                     </button>
-                                    <button onClick={() => handleToggleFollow('cancel', request.SenderID)}>
+                                    <button onClick={() => handleToggleFollow('decline', request.SenderID)}>
                                         Decline
                                     </button>
                                 </div>
@@ -437,7 +514,7 @@ const ProfilePage = () => {
                                     </small>
                                 </span>
                                 <div>
-                                    <button 
+                                    <button
                                         onClick={() => handleToggleFollow('cancel', request.ReceiverID)}
                                         className="btn-cancel-request"
                                     >
@@ -481,6 +558,20 @@ const ProfilePage = () => {
                     postId={selectedPostId}
                     onClose={closePostModal}
                     onUpdate={fetchUserPosts}
+                />
+            )}
+
+            {modalConfig && (
+                <UserListModal
+                    title={modalConfig.title}
+                    endpoint={modalConfig.endpoint}
+                    showFollowBack={modalConfig.showFollowBack}
+                    showUnfollow={modalConfig.showUnfollow}
+                    onClose={() => setModalConfig(null)}
+                    onActionComplete={() => {
+                        fetchFollowerCounts();
+                        fetchProfileDetails();
+                    }}
                 />
             )}
         </div>
