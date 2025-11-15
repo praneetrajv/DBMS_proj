@@ -218,7 +218,7 @@ const GroupsPage = () => {
                                 <p className="group-description">{group.Description}</p>
                                 <div className="group-stats">
                                     <span>👥 {group.MemberCount} members</span>
-                                    <span>📅 Joined {new Date(group.JoinDate).toLocaleDateString()}</span>
+                                    <span>Joined {new Date(group.JoinDate).toLocaleDateString()}</span>
                                 </div>
                                 <div className="group-actions">
                                     <Link to={`/group/${group.GroupID}`} className="btn-view">

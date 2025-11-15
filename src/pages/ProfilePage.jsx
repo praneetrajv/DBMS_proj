@@ -345,7 +345,7 @@ const ProfilePage = () => {
                 <div className="private-profile-notice">
                     <div className="private-profile-icon">👤</div>
                     <h1>{profileData.Name}</h1>
-                    <p className="private-badge">🔒 Private Profile</p>
+                    <p className="private-badge">Private Profile</p>
                     <p>This profile is private. Send a friend request to view their content.</p>
                     <div className="follower-stats" style={{ justifyContent: 'center', marginTop: '1rem' }}>
                         <span
@@ -387,7 +387,6 @@ const ProfilePage = () => {
                 <div>
                     <h1>
                         {profileData.Name} {isCurrentUserProfile && '(You)'}
-                        {profileData.ProfileType === 'Private' && ' 🔒'}
                     </h1>
                     <p className="subtext">@{profileData.Username} | User ID: <strong>{profileId}</strong></p>
                     <p className="subtext">
@@ -453,8 +452,8 @@ const ProfilePage = () => {
                         </label>
                         <p className="setting-description">
                             {profileType === 'Public'
-                                ? '✓ Your profile and posts are visible to everyone'
-                                : '🔒 Only friends can view your profile and posts'}
+                                ? 'Your profile and posts are visible to everyone'
+                                : 'Only friends can view your profile and posts'}
                         </p>
                     </div>
                     <div className="setting-actions">
@@ -472,7 +471,7 @@ const ProfilePage = () => {
 
             {isCurrentUserProfile && pendingRequests.length > 0 && (
                 <div className="pending-requests-section">
-                    <h2>📥 Incoming Friend Requests ({pendingRequests.length})</h2>
+                    <h2>Incoming Friend Requests ({pendingRequests.length})</h2>
                     <ul>
                         {pendingRequests.map(request => (
                             <li key={request.SenderID}>
@@ -503,7 +502,7 @@ const ProfilePage = () => {
 
             {isCurrentUserProfile && outgoingRequests.length > 0 && (
                 <div className="outgoing-requests-section">
-                    <h2>📤 Outgoing Friend Requests ({outgoingRequests.length})</h2>
+                    <h2>Outgoing Friend Requests ({outgoingRequests.length})</h2>
                     <ul>
                         {outgoingRequests.map(request => (
                             <li key={request.ReceiverID}>
@@ -529,7 +528,7 @@ const ProfilePage = () => {
 
             {isCurrentUserProfile && pendingRequests.length === 0 && outgoingRequests.length === 0 && (
                 <div className="pending-requests-section">
-                    <h2>📬 Friend Requests</h2>
+                    <h2>Friend Requests</h2>
                     <p>No pending requests.</p>
                 </div>
             )}

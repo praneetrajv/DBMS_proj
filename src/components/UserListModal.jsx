@@ -165,7 +165,6 @@ const UserListModal = ({
                     </Link>
                     <span className="user-list-username">
                         @{username}
-                        {profileType === 'Private' && ' 🔒'}
                     </span>
                     {isAdmin && (
                         <span className="role-badge admin">Admin</span>

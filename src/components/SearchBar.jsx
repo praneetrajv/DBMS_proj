@@ -47,7 +47,7 @@ const SearchBar = () => {
         <div className="search-container">
             <input
                 type="text"
-                placeholder="🔍 Search users and groups..."
+                placeholder="Search users and groups..."
                 value={query}
                 onChange={handleSearch}
             />
