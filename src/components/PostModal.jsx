@@ -15,7 +15,7 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
         setLoading(true);
         try {
             // Fetch post details
-            const postResponse = await fetch(`${API_BASE_URL}/api/post/${postId}`, {
+            const postResponse = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
                 headers: getAuthHeaders(),
             });
             if (postResponse.ok) {
@@ -24,7 +24,7 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
             }
 
             // Fetch comments
-            const commentsResponse = await fetch(`${API_BASE_URL}/api/post/${postId}/comments`, {
+            const commentsResponse = await fetch(`${API_BASE_URL}/api/posts/post/${postId}/comments`, {
                 headers: getAuthHeaders(),
             });
             if (commentsResponse.ok) {
@@ -46,7 +46,7 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
 
     const handleLike = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/post/${postId}/like`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/post/${postId}/like`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ const PostModal = ({ postId, onClose, onUpdate }) => {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/post/${postId}/comment`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/comment/${postId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

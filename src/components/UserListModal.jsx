@@ -170,9 +170,6 @@ const UserListModal = ({
                     {isAdmin && (
                         <span className="role-badge admin">Admin</span>
                     )}
-                    {youFollowThem && !isGroupMember && (
-                        <span className="mutual-badge">Mutual</span>
-                    )}
                 </div>
                 <div className="user-list-meta">
                     <span className="user-list-date">

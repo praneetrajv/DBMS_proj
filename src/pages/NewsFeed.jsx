@@ -17,7 +17,7 @@ const NewsFeed = () => {
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/feed/${userId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/feed/${userId}`, {
                 headers: getAuthHeaders(),
             });
 
@@ -51,7 +51,7 @@ const NewsFeed = () => {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/posts`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -59,7 +59,7 @@ const NewsFeed = () => {
                 },
                 body: JSON.stringify({
                     content: newPostContent,
-                    groupId: null, // Changed from undefined 'groupId' variable to null for home feed posts
+                    groupId: null,
                 }),
             });
 
@@ -68,7 +68,7 @@ const NewsFeed = () => {
             if (response.ok) {
                 alert(data.message);
                 setNewPostContent('');
-                fetchFeed(); // Changed from fetchGroupDetails() to fetchFeed()
+                fetchFeed();
             } else {
                 alert(data.message || "Failed to create post.");
             }
@@ -86,7 +86,7 @@ const NewsFeed = () => {
 
     const handleLike = async (postId) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/post/${postId}/like`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/post/${postId}/like`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

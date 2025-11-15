@@ -9,44 +9,19 @@ router.get("/feed/:userId", async (req, res) => {
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute("CALL GetNewsFeed(?)", [userIdInput]);
+    const [rows] = await connection.query("CALL GetNewsFeed(?)", [userIdInput]);
     await connection.end();
-    res.json(rows[0] || []);
+
+    const feedArray = rows[0] || [];
+
+    res.json(feedArray);
   } catch (error) {
-    console.error("Error fetching news feed from stored procedure:", error);
-    res.status(500).json({
-      message: "Error fetching news feed. Check your SQL procedure definition and database.",
-    });
+    console.error("Error fetching news feed:", error);
+    res.status(500).json({ message: "Error fetching news feed" });
   }
 });
 
-router.get("/:postId", async (req, res) => {
-  const { postId } = req.params;
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute(
-      `SELECT 
-        P.PostID, P.UserID, P.Content, P.Timestamp, P.LikeCount, P.CommentCount,
-        P.GroupID, G.Name AS GroupName, U.Name AS Author
-       FROM Post P
-       JOIN User U ON P.UserID = U.UserID
-       LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
-       WHERE P.PostID = ?`,
-      [postId],
-    );
-    await connection.end();
-
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Post not found." });
-    }
-    res.json(rows[0]);
-  } catch (error) {
-    console.error("Error fetching post details:", error);
-    res.status(500).json({ message: "Failed to retrieve post details." });
-  }
-});
-
-router.get("/:postId/comments", async (req, res) => {
+router.get("/post/:postId/comments", async (req, res) => {
   const { postId } = req.params;
   const currentUserId = req.currentUserId;
 
@@ -71,7 +46,7 @@ router.get("/:postId/comments", async (req, res) => {
   }
 });
 
-router.post("/:postId/like", async (req, res) => {
+router.post("/post/:postId/like", async (req, res) => {
   const { postId } = req.params;
   const likerId = req.currentUserId;
 
@@ -103,7 +78,7 @@ router.post("/:postId/like", async (req, res) => {
   }
 });
 
-router.post("/:postId/comment", async (req, res) => {
+router.post("/comment/:postId", async (req, res) => {
   const { postId } = req.params;
   const userId = req.currentUserId;
   const { content } = req.body;
@@ -189,6 +164,32 @@ router.post("/", async (req, res) => {
   } catch (error) {
     console.error("Error creating post:", error);
     res.status(500).json({ message: "Failed to create post." });
+  }
+});
+
+router.get("/:postId", async (req, res) => {
+  const { postId } = req.params;
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT 
+        P.PostID, P.UserID, P.Content, P.Timestamp, P.LikeCount, P.CommentCount,
+        P.GroupID, G.Name AS GroupName, U.Name AS Author
+       FROM Post P
+       JOIN User U ON P.UserID = U.UserID
+       LEFT JOIN GroupTable G ON P.GroupID = G.GroupID
+       WHERE P.PostID = ?`,
+      [postId],
+    );
+    await connection.end();
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Post not found." });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("Error fetching post details:", error);
+    res.status(500).json({ message: "Failed to retrieve post details." });
   }
 });
 

@@ -152,4 +152,104 @@ router.put("/:userId/settings", async (req, res) => {
   }
 });
 
+router.get("/:userId/groups", async (req, res) => {
+  const { userId } = req.params;
+  const currentUserId = req.currentUserId;
+
+  if (parseInt(userId) !== currentUserId) {
+    return res.status(403).json({ message: "Unauthorized to view this user's groups." });
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT 
+        G.GroupID,
+        G.Name,
+        G.Description,
+        G.MemberCount,
+        GM.Role,
+        GM.JoinDate
+       FROM GroupMembership GM
+       JOIN GroupTable G ON GM.GroupID = G.GroupID
+       WHERE GM.UserID = ?
+       ORDER BY GM.JoinDate DESC`,
+      [userId]
+    );
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching user groups:", error);
+    res.status(500).json({ message: "Failed to retrieve user groups." });
+  }
+});
+
+router.get("/:userId/followers", async (req, res) => {
+  const { userId } = req.params;
+  const currentUserId = req.currentUserId;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    
+    // Get followers (people who follow this user)
+    const [rows] = await connection.execute(
+      `SELECT 
+        F.UserID1 AS UserID,
+        U.Name,
+        U.Username,
+        U.ProfileType,
+        F.SinceDate,
+        CASE 
+          WHEN F2.UserID1 IS NOT NULL THEN 1 
+          ELSE 0 
+        END AS YouFollowThem
+       FROM Friendship F
+       JOIN User U ON F.UserID1 = U.UserID
+       LEFT JOIN Friendship F2 ON (
+         F2.UserID1 = ? AND F2.UserID2 = F.UserID1 AND F2.Status = 'Accepted'
+       )
+       WHERE F.UserID2 = ? AND F.Status = 'Accepted'
+       ORDER BY F.SinceDate DESC`,
+      [currentUserId, userId]
+    );
+    
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching followers:", error);
+    res.status(500).json({ message: "Failed to retrieve followers." });
+  }
+});
+
+router.get("/:userId/following", async (req, res) => {
+  const { userId } = req.params;
+  const currentUserId = req.currentUserId;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    
+    // Get following (people this user follows)
+    const [rows] = await connection.execute(
+      `SELECT 
+        F.UserID2 AS UserID,
+        U.Name,
+        U.Username,
+        U.ProfileType,
+        F.SinceDate,
+        1 AS YouFollowThem
+       FROM Friendship F
+       JOIN User U ON F.UserID2 = U.UserID
+       WHERE F.UserID1 = ? AND F.Status = 'Accepted'
+       ORDER BY F.SinceDate DESC`,
+      [userId]
+    );
+    
+    await connection.end();
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching following:", error);
+    res.status(500).json({ message: "Failed to retrieve following." });
+  }
+});
+
 export default router;

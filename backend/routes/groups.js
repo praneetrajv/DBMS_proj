@@ -132,12 +132,7 @@ router.get("/:groupId/members", async (req, res) => {
       [groupId, currentUserId],
     );
 
-    if (memberCheck.length === 0) {
-      await connection.end();
-      return res.status(403).json({ message: "You must be a member to view members." });
-    }
-
-    const userRole = memberCheck[0].Role;
+    const userRole = memberCheck.length > 0 ? memberCheck[0].Role : null;
 
     const [rows] = await connection.execute(
       `SELECT 

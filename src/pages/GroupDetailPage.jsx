@@ -110,7 +110,7 @@ const GroupDetailPage = () => {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/posts`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ const GroupDetailPage = () => {
 
     const handleLike = async (postId) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/post/${postId}/like`, {
+            const response = await fetch(`${API_BASE_URL}/api/posts/post/${postId}/like`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
