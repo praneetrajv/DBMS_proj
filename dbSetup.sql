@@ -172,8 +172,6 @@ BEGIN
       F.UserID2 IS NOT NULL
       -- OR if it's a group post and user is member
       OR (P.GroupID IS NOT NULL AND GM.UserID IS NOT NULL)
-      -- OR if it's from a public profile (not in a group)
-      OR (U.ProfileType = 'Public' AND P.GroupID IS NULL)
     )
   ORDER BY Priority ASC, P.Timestamp DESC;
 END$$
