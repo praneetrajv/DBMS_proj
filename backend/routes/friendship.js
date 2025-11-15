@@ -37,7 +37,9 @@ router.post("/:profileId/toggle-friendship", async (req, res) => {
   const { action } = req.body;
 
   if (initiatorId === targetId) {
-    return res.status(400).json({ message: "Cannot perform action on yourself." });
+    return res
+      .status(400)
+      .json({ message: "Cannot perform action on yourself." });
   }
 
   try {
@@ -77,9 +79,21 @@ router.post("/:profileId/toggle-friendship", async (req, res) => {
             "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, ?, CURRENT_DATE())",
             [initiatorId, targetId, relationshipStatus],
           );
-          actionMessage = isPublicProfile ? "Now following!" : "Friend request sent (Pending).";
+          actionMessage = isPublicProfile
+            ? "Now following!"
+            : "Friend request sent (Pending).";
+        } else if (!isInitiatorTheSender) {
+          const relationshipStatus = isPublicProfile ? "Accepted" : "Pending";
+          await connection.execute(
+            "INSERT INTO Friendship (UserID1, UserID2, Status, SinceDate) VALUES (?, ?, ?, CURRENT_DATE())",
+            [initiatorId, targetId, relationshipStatus],
+          );
+          actionMessage = isPublicProfile
+            ? "Now following!"
+            : "Friend request sent (Pending).";
         } else {
-          actionMessage = "A relationship already exists.";
+          actionMessage =
+            "You already sent a request or are already following this user.";
           success = false;
         }
         break;
@@ -92,7 +106,8 @@ router.post("/:profileId/toggle-friendship", async (req, res) => {
           );
           actionMessage = "Friend request accepted!";
         } else {
-          actionMessage = "Cannot accept: no pending request received or you sent the request.";
+          actionMessage =
+            "Cannot accept: no pending request received or you sent the request.";
           success = false;
         }
         break;
@@ -104,14 +119,19 @@ router.post("/:profileId/toggle-friendship", async (req, res) => {
             [initiatorId, targetId],
           );
           actionMessage = "Friend request cancelled.";
-        } else if (status === "Accepted" && isInitiatorTheSender && isPublicProfile) {
+        } else if (
+          status === "Accepted" &&
+          isInitiatorTheSender &&
+          isPublicProfile
+        ) {
           await connection.execute(
             "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
             [initiatorId, targetId],
           );
           actionMessage = "Unfollowed successfully.";
         } else {
-          actionMessage = "Cannot cancel: not the sender or request is not pending.";
+          actionMessage =
+            "Cannot cancel: not the sender or request is not pending.";
           success = false;
         }
         break;
@@ -124,20 +144,28 @@ router.post("/:profileId/toggle-friendship", async (req, res) => {
           );
           actionMessage = "Friend request declined.";
         } else {
-          actionMessage = "Cannot decline: no pending request received or you sent the request.";
+          actionMessage =
+            "Cannot decline: no pending request received or you sent the request.";
           success = false;
         }
         break;
 
       case "unfriend":
-        if (status === "Accepted") {
+        const [yourFollow] = await connection.execute(
+          "SELECT Status FROM Friendship WHERE UserID1 = ? AND UserID2 = ? AND Status = 'Accepted'",
+          [initiatorId, targetId],
+        );
+
+        if (yourFollow.length > 0) {
           await connection.execute(
-            "DELETE FROM Friendship WHERE (UserID1 = ? AND UserID2 = ?) OR (UserID1 = ? AND UserID2 = ?)",
-            [initiatorId, targetId, targetId, initiatorId],
+            "DELETE FROM Friendship WHERE UserID1 = ? AND UserID2 = ?",
+            [initiatorId, targetId],
           );
-          actionMessage = isPublicProfile ? "Unfollowed successfully." : "Unfriended successfully.";
+          actionMessage = isPublicProfile
+            ? "Unfollowed successfully."
+            : "Unfriended successfully.";
         } else {
-          actionMessage = "Cannot perform this deletion action.";
+          actionMessage = "You are not following this user.";
           success = false;
         }
         break;
@@ -155,7 +183,9 @@ router.post("/:profileId/toggle-friendship", async (req, res) => {
     }
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ message: "A friendship request already exists." });
+      return res
+        .status(409)
+        .json({ message: "A friendship request already exists." });
     }
     console.error(`Error processing friendship action:`, error);
     res.status(500).json({ message: "Could not update friendship status." });
